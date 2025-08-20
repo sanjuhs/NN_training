@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+- Always use a virtual env when running python script
+- The python .venv folder will be at root, activate that and then run any python script as needed

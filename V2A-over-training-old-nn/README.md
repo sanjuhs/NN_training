@@ -1,0 +1,1 @@
+This is going to be the folder where we will overtrain or we'll try to overfit the data onto this neural network architecture to make sure that it can even memorize all of this. If it's able to memorize then it means that it can work well.
