@@ -1,0 +1,14 @@
+{
+  "file_path": "/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/data/test.mp4",
+  "file_size_mb": 10.61563491821289,
+  "frame_count": 2003,
+  "fps": 60.0,
+  "width": 1920,
+  "height": 1080,
+  "duration_seconds": 33.38333333333333,
+  "duration_minutes": 0.5563888888888889,
+  "resolution": "1920x1080",
+  "avg_brightness": 157.81524391289437,
+  "avg_contrast": 50.74898362582521,
+  "bitrate_mbps": 2.5439364756576075
+}

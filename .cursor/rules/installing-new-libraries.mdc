@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+When installing new libraries in Python, please use the command `uv pip install library_name` as that is a more efficient way to install libraries. The UV command is a more efficient way to install libraries. so use that, also remember to activate the venev before running the command.

@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raccoon Head Reconstruction</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 30px;
+        }
+
+        .control-panel {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #333;
+            border-radius: 8px;
+        }
+
+        .section h3 {
+            margin-top: 0;
+            color: #fff;
+        }
+
+        .file-input {
+            margin-bottom: 10px;
+        }
+
+        .file-input input {
+            width: 100%;
+            padding: 8px;
+            background-color: #444;
+            color: white;
+            border: 1px solid #666;
+            border-radius: 4px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .btn-play {
+            background-color: #22c55e;
+            color: white;
+        }
+
+        .btn-pause {
+            background-color: #eab308;
+            color: white;
+        }
+
+        .btn-stop {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-reset {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-toggle {
+            background-color: #6b7280;
+            color: white;
+        }
+
+        .btn-toggle.active {
+            background-color: #22c55e;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        .scene-container {
+            height: 500px;
+            background-color: #000;
+            border: 2px solid #444;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .blendshapes-panel {
+            background-color: #2a2a2a;
+            border-radius: 10px;
+            padding: 15px;
+            height: 500px;
+            overflow-y: auto;
+        }
+
+        .blendshape-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .blendshape-name {
+            flex: 1;
+            margin-right: 10px;
+            color: #ccc;
+        }
+
+        .blendshape-value {
+            color: white;
+            font-family: monospace;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .blendshape-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #444;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .blendshape-fill {
+            height: 100%;
+            transition: width 0.1s;
+            border-radius: 2px;
+        }
+
+        .blendshape-fill.high {
+            background-color: #22c55e;
+        }
+
+        .blendshape-fill.medium {
+            background-color: #eab308;
+        }
+
+        .blendshape-fill.low {
+            background-color: #666;
+        }
+
+        .frame-scrubber {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .frame-scrubber input {
+            width: 100%;
+            height: 8px;
+            background-color: #444;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .status {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .status-item {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-green {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .status-red {
+            background-color: #fef2f2;
+            color: #991b1b;
+        }
+
+        .status-gray {
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+
+        .status-purple {
+            background-color: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        .status-blue {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .status-yellow {
+            background-color: #fefce8;
+            color: #a16207;
+        }
+
+        .error {
+            background-color: #7f1d1d;
+            border: 1px solid #dc2626;
+            color: #fca5a5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .info-item strong {
+            color: #fff;
+            display: block;
+        }
+    </style>
+
+    <!-- Import map to resolve Three.js modules -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🦝 Raccoon Head Reconstruction</h1>
+        <p style="text-align: center; color: #ccc; margin-bottom: 30px;">
+            Upload a JSON recording file to reconstruct and playback raccoon head movements
+        </p>
+
+        <!-- Error Display -->
+        <div id="error-display" class="error" style="display: none;"></div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <!-- File Upload Section -->
+            <div class="section">
+                <h3>📁 Upload Recording Data</h3>
+                <div class="file-input">
+                    <label>📄 Recording JSON File (Required)</label><br>
+                    <input type="file" id="json-file" accept=".json">
+                    <span id="json-status" style="color: #22c55e; margin-left: 10px;"></span>
+                </div>
+                <div class="file-input">
+                    <label>🎵 Audio File (Optional - for synchronized playback)</label><br>
+                    <input type="file" id="audio-file" accept=".webm,.mp3,.wav,.ogg,.m4a,audio/*">
+                    <span id="audio-status" style="color: #22c55e; margin-left: 10px;"></span>
+                    <br><small style="color: #999;">Supports: WebM, MP3, WAV, OGG, M4A</small>
+                </div>
+            </div>
+
+            <!-- Playback Controls -->
+            <div class="section" id="playback-section" style="display: none;">
+                <h3>🎮 Playback Controls</h3>
+                <div class="controls">
+                    <button id="play-btn" class="btn-play">▶️ Play</button>
+                    <button id="pause-btn" class="btn-pause" disabled>⏸️ Pause</button>
+                    <button id="stop-btn" class="btn-stop" disabled>⏹️ Stop</button>
+                    <button id="reset-btn" class="btn-reset">🦝 Reset Position</button>
+                </div>
+
+                <div class="frame-scrubber">
+                    <label id="frame-label">Frame: 1 / 1</label>
+                    <input type="range" id="frame-slider" min="0" max="0" value="0">
+                </div>
+
+                <div id="recording-info" class="info-grid"></div>
+            </div>
+
+            <!-- Display Settings -->
+            <div class="section">
+                <h3>⚙️ Display Settings</h3>
+                <div class="controls">
+                    <button id="toggle-blendshapes" class="btn-toggle active">👁️ Blendshapes Visible</button>
+                    <button id="toggle-rotation" class="btn-toggle active">🔓 Rotation Free</button>
+                    <button id="toggle-position" class="btn-toggle active">🔓 Position Free</button>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="section">
+                <h3>📊 System Status</h3>
+                <div class="status">
+                    <span id="model-status" class="status-item status-red">❌ Model</span>
+                    <span id="json-status-indicator" class="status-item status-gray">⏳ JSON</span>
+                    <span id="audio-status-indicator" class="status-item status-gray">🔇 Audio</span>
+                    <span id="playing-status" class="status-item status-gray">⏸️ Paused</span>
+                    <span id="blendshapes-status" class="status-item status-green">👁️ Shapes</span>
+                    <span id="rotation-status" class="status-item status-green">🔓 Rotation</span>
+                    <span id="position-status" class="status-item status-green">🔓 Position</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- 3D Scene -->
+            <div>
+                <h3>🦝 Raccoon Head Reconstruction</h3>
+                <div id="scene-container" class="scene-container">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading Raccoon Model...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blendshapes Panel -->
+            <div>
+                <h3 id="blendshapes-title">🎭 Current Frame Blendshapes</h3>
+                <div id="blendshapes-panel" class="blendshapes-panel">
+                    <div style="text-align: center; color: #999; margin-top: 50px;">
+                        <p>No recording loaded</p>
+                        <p style="font-size: 12px;">Upload a JSON file to begin reconstruction</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden Audio Element -->
+        <audio id="audio-player" preload="auto" style="display: none;"></audio>
+    </div>
+
+    <script type="module">
+        // Import Three.js and modules using import map
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Global variables
+        let scene, camera, renderer, controls;
+        let gltfScene, morphTargetMeshes = [];
+        let recordingData = null;
+        let audioFile = null;
+        let currentFrame = 0;
+        let isPlaying = false;
+        let currentBlendshapes = new Map();
+        let showBlendshapes = true;
+        let lockRotation = false;
+        let lockPosition = false;
+        let modelLoaded = false;
+        let animationId = null;
+        let startTime = 0;
+        let targetFPS = 30;
+
+        // Initialize the 3D scene
+        async function initializeScene() {
+            console.log('🚀 Initializing 3D scene...');
+
+            const container = document.getElementById('scene-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 100);
+            camera.position.set(0, 0, 4);
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Remove loading indicator and add renderer
+            container.innerHTML = '';
+            container.appendChild(renderer.domElement);
+
+            // Lighting setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(2, 2, 3);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            fillLight.position.set(-2, 1, 2);
+            scene.add(fillLight);
+
+            const rimLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+            rimLight.position.set(0, 2, -2);
+            scene.add(rimLight);
+
+            // Controls setup
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 0, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 2;
+            controls.maxDistance = 8;
+            controls.update();
+
+            // Load the raccoon model
+            await loadRaccoonModel();
+
+            // Start render loop
+            animate();
+        }
+
+        // Load the raccoon model
+        async function loadRaccoonModel() {
+            return new Promise((resolve, reject) => {
+                const loader = new GLTFLoader();
+                loader.load(
+                    // 'gltf/racoon_head/raccoon_head.glb',
+                    'https://storage.googleapis.com/mediapipe-tasks/face_landmarker/raccoon_head.glb',
+                    (gltf) => {
+                        console.log('✅ Raccoon head model loaded');
+
+                        // Remove any existing model
+                        if (gltfScene) {
+                            scene.remove(gltfScene);
+                            morphTargetMeshes = [];
+                        }
+
+                        gltfScene = gltf.scene;
+                        scene.add(gltfScene);
+
+                        // Scale and position the model
+                        const box = new THREE.Box3().setFromObject(gltfScene);
+                        const size = box.getSize(new THREE.Vector3());
+                        const center = box.getCenter(new THREE.Vector3());
+
+                        gltfScene.position.set(0, 0, 0);
+                        gltfScene.position.sub(center);
+
+                        const maxDimension = Math.max(size.x, size.y, size.z);
+                        const scale = 1.5 / maxDimension;
+                        gltfScene.scale.setScalar(scale);
+                        gltfScene.position.y += size.y * scale * 0.05;
+
+                        // Find meshes with morph targets
+                        gltfScene.traverse((object) => {
+                            if (object.isMesh) {
+                                const mesh = object;
+                                mesh.frustumCulled = false;
+
+                                if (mesh.morphTargetDictionary && mesh.morphTargetInfluences) {
+                                    morphTargetMeshes.push(mesh);
+                                    console.log('🦝 Added morph target mesh:', mesh.name, 'targets:', Object.keys(mesh.morphTargetDictionary).length);
+                                }
+                            }
+                        });
+
+                        console.log(`🦝 Total morph target meshes found: ${morphTargetMeshes.length}`);
+
+                        modelLoaded = true;
+                        updateStatus();
+                        resolve();
+                    },
+                    (progress) => {
+                        const percent = (progress.loaded / progress.total) * 100;
+                        console.log(`Loading model: ${percent.toFixed(1)}%`);
+                    },
+                    (error) => {
+                        console.error('❌ Model load error:', error);
+                        showError('Failed to load raccoon model. Make sure the GLB file exists at gltf/racoon_head/raccoon_head.glb');
+                        reject(error);
+                    }
+                );
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Update avatar with frame data
+        function updateFromFrameData(frame) {
+            if (!gltfScene) {
+                console.warn('🦝 No GLTF model loaded yet');
+                return;
+            }
+
+            // Apply head rotation and position if available and not locked
+            if (frame.headPosition && frame.headRotation) {
+                if (!lockRotation) {
+                    const quaternion = new THREE.Quaternion(
+                        frame.headRotation.x,
+                        frame.headRotation.y,
+                        frame.headRotation.z,
+                        frame.headRotation.w
+                    );
+                    gltfScene.quaternion.slerp(quaternion, 0.15);
+                }
+
+                if (!lockPosition) {
+                    const position = new THREE.Vector3(
+                        frame.headPosition.x,
+                        frame.headPosition.y,
+                        frame.headPosition.z
+                    );
+
+                    const constrainedPosition = position.clone();
+                    constrainedPosition.x = THREE.MathUtils.clamp(constrainedPosition.x * 0.5, -0.3, 0.3);
+                    constrainedPosition.y = THREE.MathUtils.clamp(constrainedPosition.y * 0.5, -0.2, 0.2);
+                    constrainedPosition.z = 0;
+
+                    gltfScene.position.lerp(constrainedPosition, 0.1);
+                }
+            }
+
+            // Apply blendshapes
+            const blendshapes = processBlendshapes(frame.blendshapes);
+            currentBlendshapes = blendshapes;
+            updateBlendshapes(blendshapes);
+        }
+
+        // Process blendshapes with enhancements
+        function processBlendshapes(blendshapes) {
+            const coefsMap = new Map();
+
+            for (const [name, value] of Object.entries(blendshapes)) {
+                let score = value;
+
+                // Enhance certain expressions
+                switch (name) {
+                    case 'eyeBlinkLeft':
+                    case 'eyeBlinkRight':
+                        score *= 1.5;
+                        break;
+                    case 'browOuterUpLeft':
+                    case 'browOuterUpRight':
+                        score *= 1.3;
+                        break;
+                    case 'mouthSmileLeft':
+                    case 'mouthSmileRight':
+                        score *= 1.2;
+                        break;
+                    default:
+                        score *= 1.0;
+                }
+
+                coefsMap.set(name, Math.min(score, 1.0));
+            }
+
+            return coefsMap;
+        }
+
+        // Update blendshapes on meshes
+        function updateBlendshapes(blendshapes) {
+            for (const mesh of morphTargetMeshes) {
+                if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) continue;
+
+                for (const [name, value] of blendshapes) {
+                    if (name in mesh.morphTargetDictionary) {
+                        const index = mesh.morphTargetDictionary[name];
+                        if (mesh.morphTargetInfluences[index] !== undefined) {
+                            mesh.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+                                mesh.morphTargetInfluences[index],
+                                value,
+                                0.3
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update blendshapes display
+        function updateBlendshapesDisplay() {
+            const panel = document.getElementById('blendshapes-panel');
+
+            if (!showBlendshapes) {
+                panel.innerHTML = `
+                    <div style="text-align: center; color: #999; margin-top: 50px;">
+                        <p>👁️‍🗨️ Blendshapes Hidden</p>
+                        <p style="font-size: 12px;">Toggle visibility to show values</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (currentBlendshapes.size === 0) {
+                panel.innerHTML = `
+                    <div style="text-align: center; color: #999; margin-top: 50px;">
+                        <p>No blendshapes data</p>
+                        <p style="font-size: 12px;">Upload a JSON file to begin</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort blendshapes by value descending
+            const sortedBlendshapes = Array.from(currentBlendshapes.entries())
+                .sort(([, a], [, b]) => b - a);
+
+            let html = '';
+            for (const [name, value] of sortedBlendshapes) {
+                const percentage = (value * 100).toFixed(1);
+                const barWidth = Math.max(value * 100, 2);
+                const colorClass = value > 0.1 ? 'high' : value > 0.05 ? 'medium' : 'low';
+
+                html += `
+                    <div class="blendshape-item">
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <span class="blendshape-name">${name}</span>
+                            <span class="blendshape-value">${percentage}%</span>
+                        </div>
+                        <div class="blendshape-bar">
+                            <div class="blendshape-fill ${colorClass}" style="width: ${barWidth}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            panel.innerHTML = html;
+        }
+
+        // Playback animation
+        function playbackAnimate() {
+            if (!isPlaying) return;
+
+            const audioPlayer = document.getElementById('audio-player');
+            let elapsedTime;
+
+            if (audioFile && !audioPlayer.paused) {
+                elapsedTime = audioPlayer.currentTime;
+            } else {
+                const currentTime = performance.now();
+                elapsedTime = (currentTime - startTime) / 1000;
+            }
+
+            const frameInterval = 1 / targetFPS;
+            const expectedFrameIndex = Math.floor(elapsedTime / frameInterval);
+
+            if (expectedFrameIndex >= recordingData.frameCount) {
+                // Playback complete
+                pausePlayback();
+                return;
+            }
+
+            if (expectedFrameIndex !== currentFrame && expectedFrameIndex < recordingData.frameCount) {
+                currentFrame = expectedFrameIndex;
+                const frame = recordingData.frames[currentFrame];
+                updateFromFrameData(frame);
+                updateFrameDisplay();
+                updateBlendshapesDisplay();
+            }
+
+            animationId = requestAnimationFrame(playbackAnimate);
+        }
+
+        // Playback controls
+        function startPlayback() {
+            if (!recordingData || isPlaying) return;
+
+            console.log('🎬 Starting playback');
+            isPlaying = true;
+            startTime = performance.now();
+
+            const audioPlayer = document.getElementById('audio-player');
+            if (audioFile) {
+                audioPlayer.currentTime = 0;
+                audioPlayer.play().catch(error => console.warn('Audio playback failed:', error));
+            }
+
+            playbackAnimate();
+            updateStatus();
+        }
+
+        function pausePlayback() {
+            isPlaying = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+
+            const audioPlayer = document.getElementById('audio-player');
+            if (audioPlayer) {
+                audioPlayer.pause();
+            }
+
+            updateStatus();
+        }
+
+        function stopPlayback() {
+            pausePlayback();
+            currentFrame = 0;
+
+            const audioPlayer = document.getElementById('audio-player');
+            if (audioPlayer) {
+                audioPlayer.pause();
+                audioPlayer.currentTime = 0;
+            }
+
+            if (recordingData && recordingData.frames.length > 0) {
+                updateFromFrameData(recordingData.frames[0]);
+                updateFrameDisplay();
+                updateBlendshapesDisplay();
+            }
+        }
+
+        function seekToFrame(frameIndex) {
+            if (!recordingData) return;
+
+            currentFrame = Math.max(0, Math.min(frameIndex, recordingData.frameCount - 1));
+            const frame = recordingData.frames[currentFrame];
+            updateFromFrameData(frame);
+            updateFrameDisplay();
+            updateBlendshapesDisplay();
+
+            const audioPlayer = document.getElementById('audio-player');
+            if (audioFile) {
+                const frameTime = currentFrame / targetFPS;
+                audioPlayer.currentTime = frameTime;
+            }
+        }
+
+        function resetRaccoonPosition() {
+            if (gltfScene) {
+                gltfScene.position.set(0, 0, 0);
+                gltfScene.rotation.set(0, 0, 0);
+                console.log('🦝 Raccoon position reset');
+            }
+        }
+
+        // Update frame display
+        function updateFrameDisplay() {
+            if (recordingData) {
+                document.getElementById('frame-label').textContent =
+                    `Frame: ${currentFrame + 1} / ${recordingData.frameCount}`;
+                document.getElementById('frame-slider').value = currentFrame;
+            }
+        }
+
+        // Update status indicators
+        function updateStatus() {
+            document.getElementById('model-status').textContent = modelLoaded ? '✅ Model' : '❌ Model';
+            document.getElementById('model-status').className = `status-item ${modelLoaded ? 'status-green' : 'status-red'}`;
+
+            document.getElementById('json-status-indicator').textContent = recordingData ? '✅ JSON' : '⏳ JSON';
+            document.getElementById('json-status-indicator').className = `status-item ${recordingData ? 'status-green' : 'status-gray'}`;
+
+            document.getElementById('audio-status-indicator').textContent = audioFile ? '🎵 Audio' : '🔇 Audio';
+            document.getElementById('audio-status-indicator').className = `status-item ${audioFile ? 'status-purple' : 'status-gray'}`;
+
+            document.getElementById('playing-status').textContent = isPlaying ? '▶️ Playing' : '⏸️ Paused';
+            document.getElementById('playing-status').className = `status-item ${isPlaying ? 'status-blue' : 'status-gray'}`;
+
+            document.getElementById('blendshapes-status').textContent = showBlendshapes ? '👁️ Shapes' : '👁️‍🗨️ Shapes';
+            document.getElementById('blendshapes-status').className = `status-item ${showBlendshapes ? 'status-green' : 'status-yellow'}`;
+
+            document.getElementById('rotation-status').textContent = lockRotation ? '🔒 Rotation' : '🔓 Rotation';
+            document.getElementById('rotation-status').className = `status-item ${lockRotation ? 'status-red' : 'status-green'}`;
+
+            document.getElementById('position-status').textContent = lockPosition ? '🔒 Position' : '🔓 Position';
+            document.getElementById('position-status').className = `status-item ${lockPosition ? 'status-red' : 'status-green'}`;
+
+            // Update button states
+            document.getElementById('play-btn').disabled = !recordingData || !modelLoaded || isPlaying;
+            document.getElementById('pause-btn').disabled = !isPlaying;
+            document.getElementById('stop-btn').disabled = !recordingData;
+            document.getElementById('frame-slider').disabled = isPlaying;
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('error-display');
+            errorDiv.textContent = `❌ ${message}`;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Event listeners
+        // Initialize scene on module load
+        initializeScene();
+
+        // File upload handlers
+        document.getElementById('json-file').addEventListener('change', async function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                if (!data.frames || !Array.isArray(data.frames)) {
+                    throw new Error('Invalid JSON structure. Missing frames array.');
+                }
+
+                // Generate fallback sessionInfo if missing
+                if (!data.sessionInfo) {
+                    data.sessionInfo = {
+                        sessionId: `fallback-${Date.now()}`,
+                        startTime: Date.now(),
+                        targetFPS: 30
+                    };
+                }
+
+                if (!data.frameCount) {
+                    data.frameCount = data.frames.length;
+                }
+
+                if (!data.audioChunkCount) {
+                    data.audioChunkCount = 0;
+                }
+
+                recordingData = data;
+                targetFPS = data.sessionInfo.targetFPS;
+
+                // Update UI
+                document.getElementById('json-status').textContent = `✅ JSON: ${data.frameCount} frames`;
+                document.getElementById('playback-section').style.display = 'block';
+                document.getElementById('frame-slider').max = data.frameCount - 1;
+
+                // Update recording info
+                const infoDiv = document.getElementById('recording-info');
+                infoDiv.innerHTML = `
+                   <div><strong>Session ID:</strong><br><span style="font-family: monospace; font-size: 11px;">${data.sessionInfo.sessionId}</span></div>
+                   <div><strong>Target FPS:</strong><br>${data.sessionInfo.targetFPS}</div>
+                   <div><strong>Duration:</strong><br>~${(data.frameCount / data.sessionInfo.targetFPS).toFixed(1)}s</div>
+                   <div><strong>Audio:</strong><br><span id="audio-info">${audioFile ? audioFile.name.substring(0, 15) + '...' : 'No audio'}</span></div>
+               `;
+
+                // Reset playback state
+                currentFrame = 0;
+                if (data.frames.length > 0) {
+                    updateFromFrameData(data.frames[0]);
+                }
+                updateFrameDisplay();
+                updateBlendshapesDisplay();
+                updateStatus();
+
+                console.log(`📁 Loaded recording with ${data.frameCount} frames at ${data.sessionInfo.targetFPS} FPS`);
+
+            } catch (error) {
+                console.error('❌ Error loading JSON:', error);
+                showError(`Failed to load JSON file: ${error.message}`);
+            }
+        });
+
+        document.getElementById('audio-file').addEventListener('change', async function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const allowedTypes = ['audio/webm', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a'];
+            const isAllowed = allowedTypes.some(type => file.type.includes(type.split('/')[1]));
+
+            if (!isAllowed && !file.type.startsWith('audio/')) {
+                showError(`Unsupported audio format: ${file.type}. Please use WebM, MP3, WAV, OGG, or M4A.`);
+                return;
+            }
+
+            try {
+                const audioPlayer = document.getElementById('audio-player');
+                if (audioPlayer.src) {
+                    URL.revokeObjectURL(audioPlayer.src);
+                }
+
+                const audioUrl = URL.createObjectURL(file);
+                audioPlayer.src = audioUrl;
+                audioFile = file;
+
+                document.getElementById('audio-status').textContent = `✅ Audio: ${file.name}`;
+
+                // Update recording info if it exists
+                const audioInfo = document.getElementById('audio-info');
+                if (audioInfo) {
+                    audioInfo.innerHTML = `<span style="color: #22c55e;">🎵 ${file.name.length > 15 ? file.name.substring(0, 15) + '...' : file.name}</span>`;
+                }
+
+                updateStatus();
+                console.log(`🎵 Audio file loaded: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+
+            } catch (error) {
+                console.error('❌ Error loading audio:', error);
+                showError(`Failed to load audio file: ${error.message}`);
+            }
+        });
+
+        // Control button handlers
+        document.getElementById('play-btn').addEventListener('click', startPlayback);
+        document.getElementById('pause-btn').addEventListener('click', pausePlayback);
+        document.getElementById('stop-btn').addEventListener('click', stopPlayback);
+        document.getElementById('reset-btn').addEventListener('click', resetRaccoonPosition);
+
+        // Frame slider
+        document.getElementById('frame-slider').addEventListener('input', function (e) {
+            seekToFrame(parseInt(e.target.value));
+        });
+
+        // Toggle buttons
+        document.getElementById('toggle-blendshapes').addEventListener('click', function () {
+            showBlendshapes = !showBlendshapes;
+            this.textContent = showBlendshapes ? '👁️ Blendshapes Visible' : '👁️‍🗨️ Blendshapes Hidden';
+            this.className = `btn-toggle ${showBlendshapes ? 'active' : ''}`;
+
+            const title = document.getElementById('blendshapes-title');
+            title.textContent = showBlendshapes ? '🎭 Current Frame Blendshapes' : '🎭 Current Frame Blendshapes (Hidden)';
+
+            updateBlendshapesDisplay();
+            updateStatus();
+        });
+
+        document.getElementById('toggle-rotation').addEventListener('click', function () {
+            lockRotation = !lockRotation;
+            this.textContent = lockRotation ? '🔒 Rotation Locked' : '🔓 Rotation Free';
+            this.className = `btn-toggle ${!lockRotation ? 'active' : ''}`;
+            updateStatus();
+        });
+
+        document.getElementById('toggle-position').addEventListener('click', function () {
+            lockPosition = !lockPosition;
+            this.textContent = lockPosition ? '🔒 Position Locked' : '🔓 Position Free';
+            this.className = `btn-toggle ${!lockPosition ? 'active' : ''}`;
+            updateStatus();
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function () {
+            if (renderer && camera) {
+                const container = document.getElementById('scene-container');
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            }
+        });
+
+        // Initial status update
+        updateStatus();
+    </script>
+</body>
+
+</html>
