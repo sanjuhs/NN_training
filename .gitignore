@@ -29,3 +29,10 @@ __pycache__/
 
 
 */outputhtml/gltf/*
+hf_downloads/
+hf_datasets/
+
+temp_processing/
+
+data/
+
