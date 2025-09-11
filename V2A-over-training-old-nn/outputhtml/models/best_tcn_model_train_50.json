@@ -1,0 +1,32 @@
+{
+  "model_type": "TCN_Audio_to_Blendshapes",
+  "pytorch_source": "models/best_tcn_model_train_50.pth",
+  "onnx_path": "models/best_tcn_model_train_50.onnx",
+  "input_shape": [
+    "batch_size",
+    "sequence_length",
+    80
+  ],
+  "output_shape": [
+    "batch_size",
+    "sequence_length",
+    59
+  ],
+  "input_name": "audio_features",
+  "output_name": "blendshapes",
+  "description": {
+    "input": "80 mel-spectrogram features",
+    "output": "59 values: 52 blendshapes [0,1] + 7 head pose [-0.2,0.2]"
+  },
+  "usage_example": {
+    "python": "\nimport onnxruntime as ort\nimport numpy as np\n\n# Load model\nsession = ort.InferenceSession('tcn_model.onnx')\n\n# Prepare input (batch_size, sequence_length, 80)\naudio_features = np.random.randn(1, 100, 80).astype(np.float32)\n\n# Run inference\noutputs = session.run(None, {'audio_features': audio_features})\nblendshapes = outputs[0]  # Shape: (1, 100, 59)\n"
+  },
+  "model_config": {
+    "in_features": 80,
+    "out_features": 59,
+    "hidden": 128,
+    "levels": 4,
+    "kernel_size": 3,
+    "dropout": 0.1
+  }
+}

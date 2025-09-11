@@ -1,0 +1,21 @@
+{
+  "model_type": "TCN_Audio_to_Blendshapes",
+  "pytorch_source": "models/best_tcn_model_train_50.pth",
+  "onnx_path": "models/best_tcn_model_train_50.onnx",
+  "input_name": "audio_features",
+  "output_name": "blendshapes",
+  "input_shape": [
+    "batch_size",
+    "sequence_length",
+    80
+  ],
+  "output_shape": [
+    "batch_size",
+    "sequence_length",
+    59
+  ],
+  "expects_layout": {
+    "input": "B,T,F",
+    "output": "B,T,D"
+  }
+}

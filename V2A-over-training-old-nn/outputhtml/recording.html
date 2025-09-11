@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Audio Recorder - WAV Export</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .controls {
+            margin: 30px 0;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .status.recording {
+            background: rgba(255, 87, 87, 0.1);
+            color: #ff5757;
+            border: 2px solid rgba(255, 87, 87, 0.3);
+        }
+
+        .status.ready {
+            background: rgba(46, 213, 115, 0.1);
+            color: #2ed573;
+            border: 2px solid rgba(46, 213, 115, 0.3);
+        }
+
+        .status.idle {
+            background: rgba(116, 125, 136, 0.1);
+            color: #747d8c;
+            border: 2px solid rgba(116, 125, 136, 0.3);
+        }
+
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+
+        .audio-preview {
+            margin: 20px 0;
+            width: 100%;
+        }
+
+        audio {
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .wave-animation {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .wave-animation.active {
+            display: flex;
+        }
+
+        .wave {
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            margin: 0 2px;
+            border-radius: 2px;
+            animation: wave 1s infinite ease-in-out;
+        }
+
+        .wave:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .wave:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .wave:nth-child(4) {
+            animation-delay: 0.3s;
+        }
+
+        .wave:nth-child(5) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes wave {
+
+            0%,
+            40%,
+            100% {
+                transform: scaleY(0.4);
+            }
+
+            20% {
+                transform: scaleY(1);
+            }
+        }
+
+        .download-link {
+            display: inline-block;
+            background: linear-gradient(45deg, #2ed573, #17c0eb);
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-weight: 500;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(46, 213, 115, 0.3);
+        }
+
+        .download-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46, 213, 115, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎙️ Audio Recorder</h1>
+
+        <div class="status idle" id="status">
+            Ready to record
+        </div>
+
+        <div class="timer" id="timer">00:00</div>
+
+        <div class="wave-animation" id="waveAnimation">
+            <div class="wave"></div>
+            <div class="wave"></div>
+            <div class="wave"></div>
+            <div class="wave"></div>
+            <div class="wave"></div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn">Start Recording</button>
+            <button id="stopBtn" disabled>Stop Recording</button>
+            <button id="clearBtn" disabled>Clear</button>
+        </div>
+
+        <div class="audio-preview" id="audioPreview" style="display: none;">
+            <audio controls id="audioPlayer"></audio>
+        </div>
+
+        <div id="downloadSection" style="display: none;">
+            <a href="#" id="downloadLink" class="download-link" download="recording.wav">
+                📥 Download WAV File
+            </a>
+        </div>
+    </div>
+
+    <script>
+        class AudioRecorder {
+            constructor() {
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.stream = null;
+                this.startTime = 0;
+                this.timerInterval = null;
+
+                this.initElements();
+                this.bindEvents();
+            }
+
+            initElements() {
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.status = document.getElementById('status');
+                this.timer = document.getElementById('timer');
+                this.audioPlayer = document.getElementById('audioPlayer');
+                this.audioPreview = document.getElementById('audioPreview');
+                this.downloadLink = document.getElementById('downloadLink');
+                this.downloadSection = document.getElementById('downloadSection');
+                this.waveAnimation = document.getElementById('waveAnimation');
+            }
+
+            bindEvents() {
+                this.startBtn.addEventListener('click', () => this.startRecording());
+                this.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.clearBtn.addEventListener('click', () => this.clearRecording());
+            }
+
+            async startRecording() {
+                try {
+                    // Request microphone access
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 44100,
+                            channelCount: 2,
+                            volume: 1.0
+                        }
+                    });
+
+                    // Create MediaRecorder
+                    this.mediaRecorder = new MediaRecorder(this.stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+
+                    this.audioChunks = [];
+                    this.startTime = Date.now();
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                    };
+
+                    // Start recording
+                    this.mediaRecorder.start(100); // Collect data every 100ms
+
+                    // Update UI
+                    this.updateStatus('recording', 'Recording...');
+                    this.startBtn.disabled = true;
+                    this.stopBtn.disabled = false;
+                    this.clearBtn.disabled = true;
+                    this.waveAnimation.classList.add('active');
+
+                    // Start timer
+                    this.startTimer();
+
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    this.updateStatus('idle', 'Error: Could not access microphone');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+
+                    // Stop all tracks
+                    if (this.stream) {
+                        this.stream.getTracks().forEach(track => track.stop());
+                    }
+
+                    // Update UI
+                    this.updateStatus('ready', 'Processing...');
+                    this.startBtn.disabled = false;
+                    this.stopBtn.disabled = true;
+                    this.waveAnimation.classList.remove('active');
+
+                    // Stop timer
+                    this.stopTimer();
+                }
+            }
+
+            async processRecording() {
+                try {
+                    // Create blob from chunks
+                    const webmBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+
+                    // Convert to WAV
+                    const wavBlob = await this.convertToWav(webmBlob);
+
+                    // Create audio URL
+                    const audioUrl = URL.createObjectURL(wavBlob);
+
+                    // Update audio player
+                    this.audioPlayer.src = audioUrl;
+                    this.audioPreview.style.display = 'block';
+
+                    // Setup download
+                    this.downloadLink.href = audioUrl;
+                    this.downloadLink.download = `recording_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.wav`;
+                    this.downloadSection.style.display = 'block';
+
+                    // Update UI
+                    this.updateStatus('ready', 'Recording ready!');
+                    this.clearBtn.disabled = false;
+
+                } catch (error) {
+                    console.error('Error processing recording:', error);
+                    this.updateStatus('idle', 'Error processing recording');
+                }
+            }
+
+            async convertToWav(webmBlob) {
+                // Create audio context
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Convert blob to array buffer
+                const arrayBuffer = await webmBlob.arrayBuffer();
+
+                // Decode audio data
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Convert to WAV
+                const wavBuffer = this.audioBufferToWav(audioBuffer);
+
+                return new Blob([wavBuffer], { type: 'audio/wav' });
+            }
+
+            audioBufferToWav(buffer) {
+                const length = buffer.length;
+                const numberOfChannels = buffer.numberOfChannels;
+                const sampleRate = buffer.sampleRate;
+                const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+                const view = new DataView(arrayBuffer);
+
+                // WAV header
+                const writeString = (offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+
+                writeString(0, 'RIFF');
+                view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+                writeString(8, 'WAVE');
+                writeString(12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, numberOfChannels, true);
+                view.setUint32(24, sampleRate, true);
+                view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+                view.setUint16(32, numberOfChannels * 2, true);
+                view.setUint16(34, 16, true);
+                writeString(36, 'data');
+                view.setUint32(40, length * numberOfChannels * 2, true);
+
+                // Convert float samples to 16-bit PCM
+                let offset = 44;
+                for (let i = 0; i < length; i++) {
+                    for (let channel = 0; channel < numberOfChannels; channel++) {
+                        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                        offset += 2;
+                    }
+                }
+
+                return arrayBuffer;
+            }
+
+            clearRecording() {
+                // Reset audio player
+                this.audioPlayer.src = '';
+                this.audioPreview.style.display = 'none';
+                this.downloadSection.style.display = 'none';
+
+                // Revoke blob URL to free memory
+                if (this.downloadLink.href) {
+                    URL.revokeObjectURL(this.downloadLink.href);
+                }
+
+                // Reset UI
+                this.updateStatus('idle', 'Ready to record');
+                this.clearBtn.disabled = true;
+                this.timer.textContent = '00:00';
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                    const seconds = (elapsed % 60).toString().padStart(2, '0');
+                    this.timer.textContent = `${minutes}:${seconds}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            updateStatus(className, text) {
+                this.status.className = `status ${className}`;
+                this.status.textContent = text;
+            }
+        }
+
+        // Initialize the recorder when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new AudioRecorder();
+        });
+    </script>
+</body>
+
+</html>
