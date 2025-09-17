@@ -23,3 +23,12 @@ I will also be using one large virtual environment, and I will keep doing a pip 
 I'll also make sure that each of the folders has its own README file so that you can read that and understand or get an overview of what's going on in that specific folder, and it's relatively well organized there.
 
 My current repo is a M1 Mac, so my current work system is an M1 Mac. And if you have it, you should be able to replicate it fairly, simply, or easily.
+
+THe output of the V2A project is as follows:
+
+![alt text](V2A-over-training-old-nn/documentation/image.png)
+![alt text](V2A-over-training-old-nn/documentation/image-1.png)
+![alt text](V2A-over-training-old-nn/documentation/image-2.png)
+![alt text](V2A-over-training-old-nn/documentation/image-3.png)
+
+The output of the V2A project is as follows:

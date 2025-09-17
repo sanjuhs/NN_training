@@ -588,6 +588,7 @@
             <div class="audio-preview" id="audioPreview" style="display: none;">
                 <audio controls id="audioPlayer"></audio>
                 <div class="audio-info" id="audioInfo"></div>
+                <a href="#" id="downloadAudioLink" class="download-link" style="display: none;">🎧 Download Audio</a>
             </div>
         </div>
 
@@ -683,22 +684,100 @@
 
     <script type="module">
 
-        // Make fft.js (UMD) accessible from ESM scope
-        const FFTJS = window.FFT || globalThis.FFT;
-        if (!FFTJS) {
-            throw new Error("fft.js failed to load. Make sure the <script src='...fft.min.js'script> tag is before this module.");
+        // FFT fallback (in case CDN fails). Provides minimal compatible API with fft.js used below.
+        class FallbackFFT {
+            constructor(size) {
+                if ((size & (size - 1)) !== 0) {
+                    throw new Error('FFT size must be power of two');
+                }
+                this.size = size;
+                const half = size >>> 1;
+                this.cosTable = new Float32Array(half);
+                this.sinTable = new Float32Array(half);
+                for (let i = 0; i < half; i++) {
+                    const angle = -2 * Math.PI * i / size;
+                    this.cosTable[i] = Math.cos(angle);
+                    this.sinTable[i] = Math.sin(angle);
+                }
+                this.bitReversed = FallbackFFT._bitReverseIndices(size);
+            }
+            createComplexArray() {
+                return new Float32Array(this.size * 2);
+            }
+            // Computes complex FFT of real input (imag parts assumed 0). Output is interleaved complex.
+            realTransform(out, input) {
+                const n = this.size;
+                const real = new Float32Array(n);
+                const imag = new Float32Array(n);
+                const len = Math.min(input.length, n);
+                for (let i = 0; i < len; i++) real[i] = input[i];
+
+                // Bit-reversal permutation
+                for (let i = 0; i < n; i++) {
+                    const j = this.bitReversed[i];
+                    if (j > i) {
+                        let tr = real[i]; real[i] = real[j]; real[j] = tr;
+                        let ti = imag[i]; imag[i] = imag[j]; imag[j] = ti;
+                    }
+                }
+
+                // Iterative Cooley–Tukey decimation-in-time FFT
+                for (let step = 1; step < n; step <<= 1) {
+                    const jump = step << 1;
+                    const tableStep = n / jump;
+                    for (let i = 0; i < n; i += jump) {
+                        for (let j = 0; j < step; j++) {
+                            const k = (j * tableStep) | 0;
+                            const wr = this.cosTable[k];
+                            const wi = this.sinTable[k];
+                            const ir = real[i + j + step];
+                            const ii = imag[i + j + step];
+                            const tr = wr * ir - wi * ii;
+                            const ti = wr * ii + wi * ir;
+                            real[i + j + step] = real[i + j] - tr;
+                            imag[i + j + step] = imag[i + j] - ti;
+                            real[i + j] += tr;
+                            imag[i + j] += ti;
+                        }
+                    }
+                }
+
+                for (let i = 0; i < n; i++) {
+                    out[2 * i] = real[i];
+                    out[2 * i + 1] = imag[i];
+                }
+            }
+            // No-op: spectrum is already complete for our purposes
+            completeSpectrum(_) { }
+            static _bitReverseIndices(n) {
+                const result = new Uint32Array(n);
+                const bits = Math.log2(n) | 0;
+                for (let i = 0; i < n; i++) {
+                    let x = i, y = 0;
+                    for (let b = 0; b < bits; b++) { y = (y << 1) | (x & 1); x >>= 1; }
+                    result[i] = y >>> 0;
+                }
+                return result;
+            }
+        }
+
+        function getFFTClass() {
+            return window.FFT || globalThis.FFT || FallbackFFT;
         }
 
 
-        // Import Three.js and modules
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        // Lazy-load Three.js modules when visualization is initialized
+        let THREE; // Namespace for three.js
+        let GLTFLoader; // Class
+        let OrbitControls; // Class
 
         // Global variables
         let onnxSession = null;
         let audioBuffer = null;
         let inferenceResults = null;
+        let latestAudioBlob = null;
+        let latestAudioFilename = null;
+        let currentAudioObjectUrl = null;
 
         // Recording variables
         let mediaRecorder = null;
@@ -745,6 +824,19 @@
         // Initialize the 3D scene
         async function initializeScene() {
             console.log('🚀 Initializing 3D scene...');
+
+            // Dynamically import Three.js modules if not already loaded
+            if (!THREE || !GLTFLoader || !OrbitControls) {
+                try {
+                    THREE = await import('three');
+                    ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+                    ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
+                } catch (err) {
+                    console.error('❌ Failed to load Three.js modules:', err);
+                    showStatus('inferenceStatus', 'error', 'Failed to load 3D modules. Check your internet connection.');
+                    return;
+                }
+            }
 
             const container = document.getElementById('sceneContainer');
             const width = container.clientWidth;
@@ -1004,7 +1096,10 @@
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                onnxSession = await ort.InferenceSession.create(arrayBuffer);
+                if (!window.ort) {
+                    throw new Error('ONNX Runtime failed to load. Check network and CDN.');
+                }
+                onnxSession = await window.ort.InferenceSession.create(arrayBuffer);
 
                 showStatus('modelStatus', 'success', `Model loaded successfully! Input: ${JSON.stringify(onnxSession.inputNames)}, Output: ${JSON.stringify(onnxSession.outputNames)}`);
                 updateInferenceButton();
@@ -1028,9 +1123,19 @@
                 });
 
                 // Create MediaRecorder
-                mediaRecorder = new MediaRecorder(recordingStream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
+                let mimeType = '';
+                const candidates = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/mp4;codecs=mp4a.40.2',
+                    'audio/mpeg'
+                ];
+                for (const c of candidates) {
+                    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) {
+                        mimeType = c; break;
+                    }
+                }
+                mediaRecorder = new MediaRecorder(recordingStream, mimeType ? { mimeType } : undefined);
 
                 audioChunks = [];
                 recordingStartTime = Date.now();
@@ -1093,6 +1198,10 @@
                 const wavBlob = await convertToWav(webmBlob);
 
                 // Create audio URL for preview
+                if (currentAudioObjectUrl) {
+                    URL.revokeObjectURL(currentAudioObjectUrl);
+                    currentAudioObjectUrl = null;
+                }
                 const audioUrl = URL.createObjectURL(wavBlob);
                 const audioPlayer = document.getElementById('audioPlayer');
                 audioPlayer.src = audioUrl;
@@ -1102,6 +1211,15 @@
                 const arrayBuffer = await wavBlob.arrayBuffer();
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Setup download link
+                latestAudioBlob = wavBlob;
+                latestAudioFilename = `recording_${Date.now()}.wav`;
+                currentAudioObjectUrl = audioUrl;
+                const dl = document.getElementById('downloadAudioLink');
+                dl.href = audioUrl;
+                dl.download = latestAudioFilename;
+                dl.style.display = 'inline-block';
 
                 // Update UI
                 updateRecordingStatus('ready', 'Recording ready!');
@@ -1131,10 +1249,20 @@
             }
 
             document.getElementById('audioPreview').style.display = 'none';
+            const dl = document.getElementById('downloadAudioLink');
+            dl.style.display = 'none';
+            dl.href = '#';
+            dl.removeAttribute('download');
+            if (currentAudioObjectUrl) {
+                URL.revokeObjectURL(currentAudioObjectUrl);
+                currentAudioObjectUrl = null;
+            }
 
             // Reset audio buffer
             audioBuffer = null;
             inferenceResults = null;
+            latestAudioBlob = null;
+            latestAudioFilename = null;
 
             // Reset UI
             updateRecordingStatus('idle', 'Ready to record');
@@ -1285,6 +1413,10 @@
 
             try {
                 // Create audio URL for preview
+                if (currentAudioObjectUrl) {
+                    URL.revokeObjectURL(currentAudioObjectUrl);
+                    currentAudioObjectUrl = null;
+                }
                 const audioUrl = URL.createObjectURL(file);
                 const audioPlayer = document.getElementById('audioPlayer');
                 audioPlayer.src = audioUrl;
@@ -1299,6 +1431,15 @@
                 const duration = audioBuffer.duration.toFixed(2);
                 const sampleRate = audioBuffer.sampleRate;
                 document.getElementById('audioInfo').innerHTML = `Duration: ${duration}s | Sample Rate: ${sampleRate}Hz | Source: Upload`;
+
+                // Setup download link
+                latestAudioBlob = file;
+                latestAudioFilename = file.name || `audio_${Date.now()}`;
+                currentAudioObjectUrl = audioUrl;
+                const dl = document.getElementById('downloadAudioLink');
+                dl.href = audioUrl;
+                dl.download = latestAudioFilename;
+                dl.style.display = 'inline-block';
 
                 // Clear recording status
                 updateRecordingStatus('idle', 'Ready to record');
@@ -1342,7 +1483,8 @@
                 showStatus('inferenceStatus', 'info', 'Running ONNX inference...');
 
                 // Run ONNX inference
-                const inputTensor = new ort.Tensor('float32', melFeatures.data, [1, melFeatures.frames, audioConfig.nMels]);
+                if (!window.ort) throw new Error('ONNX runtime not available');
+                const inputTensor = new window.ort.Tensor('float32', melFeatures.data, [1, melFeatures.frames, audioConfig.nMels]);
                 const feeds = {};
                 feeds[onnxSession.inputNames[0]] = inputTensor;
 
@@ -1470,24 +1612,33 @@
         }
 
         function stftPower(signal, sr, { nFFT, hop, win }, hann) {
+            const FFTCtor = getFFTClass();
+            if (!FFTCtor) {
+                throw new Error('FFT library is not available. Please ensure fft.js is loaded.');
+            }
             const nFreqs = Math.floor(nFFT / 2) + 1;
             const nFrames = Math.max(0, Math.floor((signal.length - win) / hop) + 1);
             const out = new Float32Array(nFrames * nFreqs);
-            const f = new FFT(nFFT);
-            const re = new Float32Array(nFFT);
-            const im = new Float32Array(nFFT);
+            const f = new FFTCtor(nFFT);
+            const complex = f.createComplexArray();
+            const frameSig = new Float32Array(nFFT);
 
             for (let frame = 0; frame < nFrames; frame++) {
                 const start = frame * hop;
-                // windowed frame -> zero-pad to nFFT
-                for (let i = 0; i < nFFT; i++) { re[i] = 0; im[i] = 0; }
+                // windowing and zero-pad
+                for (let i = 0; i < nFFT; i++) frameSig[i] = 0;
                 for (let i = 0; i < win; i++) {
-                    re[i] = (signal[start + i] || 0) * hann[i];
+                    frameSig[i] = (signal[start + i] || 0) * hann[i];
                 }
-                f.transform(re, im); // in-place: returns spectrum in re/im
-                // power spectrum |X|^2 (keep only positive freqs)
+                // real FFT
+                f.realTransform(complex, frameSig);
+                if (typeof f.completeSpectrum === 'function') {
+                    f.completeSpectrum(complex);
+                }
+                // power spectrum |X|^2 for positive frequencies
                 for (let k = 0; k < nFreqs; k++) {
-                    const rr = re[k], ii = im[k];
+                    const rr = complex[2 * k];
+                    const ii = complex[2 * k + 1];
                     out[frame * nFreqs + k] = rr * rr + ii * ii;
                 }
             }
@@ -2080,7 +2231,9 @@
         });
 
         // Initialize ONNX runtime
-        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/';
+        if (window.ort && window.ort.env && window.ort.env.wasm) {
+            window.ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/';
+        }
 
         // Make functions globally accessible for HTML onclick handlers
         window.startRecording = startRecording;
