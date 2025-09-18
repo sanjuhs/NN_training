@@ -581,6 +581,9 @@
             <div id="modelStatus" class="status info" style="display: none;">
                 Model not loaded
             </div>
+            <div class="controls">
+                <button id="loadDefaultModelBtn" onclick="loadDefaultModel()">⬇️ Use default GitHub model</button>
+            </div>
         </div>
 
         <!-- Audio Input Section -->
@@ -623,6 +626,19 @@
                         <span id="audioFileName">Click to select audio file (.wav, .mp3, .m4a)</span>
                     </div>
                     <input type="file" id="audioFile" accept=".wav,.mp3,.m4a,.webm" onchange="handleAudioFile(this)">
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="divider">
+                <span>OR</span>
+            </div>
+
+            <!-- Default Sample Audio -->
+            <div class="upload-section">
+                <h4>🧪 Load Sample Audio</h4>
+                <div class="controls">
+                    <button id="loadSampleAudioBtn" onclick="loadSampleAudio()">⬇️ Use default GitHub audio</button>
                 </div>
             </div>
 
@@ -2366,6 +2382,93 @@
         window.handleModelFile = handleModelFile;
         window.handleAudioFile = handleAudioFile;
         window.runInference = runInference;
+        window.loadDefaultModel = loadDefaultModelFromUrl;
+        window.loadSampleAudio = loadSampleAudioFromUrl;
+
+        // --- Defaults (GitHub raw URLs) ---
+        const DEFAULT_MODEL_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/best_tcn_model_train_50.onnx';
+        const DEFAULT_AUDIO_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav';
+
+        async function loadDefaultModelFromUrl(url = DEFAULT_MODEL_URL) {
+            try {
+                showStatus('modelStatus', 'info', 'Downloading default model...');
+                const resp = await fetch(url, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const arrayBuffer = await resp.arrayBuffer();
+                if (!window.ort) throw new Error('ONNX runtime not available');
+                onnxSession = await window.ort.InferenceSession.create(arrayBuffer);
+                document.getElementById('modelFileName').textContent = 'best_tcn_model_train_50.onnx (GitHub)';
+                showStatus('modelStatus', 'success', `Model loaded! Input: ${JSON.stringify(onnxSession.inputNames)}, Output: ${JSON.stringify(onnxSession.outputNames)}`);
+                updateInferenceButton();
+            } catch (e) {
+                console.error('Default model load failed:', e);
+                showStatus('modelStatus', 'error', `Failed to load default model: ${e.message}`);
+            }
+        }
+
+        async function loadSampleAudioFromUrl(url = DEFAULT_AUDIO_URL) {
+            try {
+                const btn = document.getElementById('loadSampleAudioBtn');
+                if (btn) { btn.disabled = true; btn.textContent = 'Downloading...'; }
+                const resp = await fetch(url, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const blob = await resp.blob();
+                const audioUrl = URL.createObjectURL(blob);
+
+                // Preview
+                if (currentAudioObjectUrl) {
+                    URL.revokeObjectURL(currentAudioObjectUrl);
+                    currentAudioObjectUrl = null;
+                }
+                const audioPlayer = document.getElementById('audioPlayer');
+                audioPlayer.src = audioUrl;
+                document.getElementById('audioPreview').style.display = 'block';
+                document.getElementById('audioFileName').textContent = 'sample-audio.wav (GitHub)';
+
+                // Decode for inference
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Download link
+                latestAudioBlob = blob;
+                latestAudioFilename = 'sample-audio.wav';
+                currentAudioObjectUrl = audioUrl;
+                const dl = document.getElementById('downloadAudioLink');
+                dl.href = audioUrl;
+                dl.download = latestAudioFilename;
+                dl.style.display = 'inline-block';
+
+                // Info and state
+                const duration = audioBuffer.duration.toFixed(2);
+                const sampleRate = audioBuffer.sampleRate;
+                document.getElementById('audioInfo').innerHTML = `Duration: ${duration}s | Sample Rate: ${sampleRate}Hz | Source: GitHub`;
+                updateRecordingStatus('idle', 'Ready to record');
+                document.getElementById('clearRecordBtn').disabled = true;
+                document.getElementById('recordingTimer').textContent = '00:00';
+                updateInferenceButton();
+            } catch (e) {
+                console.error('Default audio load failed:', e);
+                showStatus('inferenceStatus', 'error', `Failed to load sample audio: ${e.message}`);
+            } finally {
+                const btn = document.getElementById('loadSampleAudioBtn');
+                if (btn) { btn.disabled = false; btn.textContent = '⬇️ Use default GitHub audio'; }
+            }
+        }
+
+        // Auto-load defaults on page load for instant demo
+        window.addEventListener('load', async () => {
+            // Only auto-load if nothing is loaded yet
+            if (!onnxSession) {
+                await loadDefaultModelFromUrl();
+            }
+            if (!audioBuffer) {
+                await loadSampleAudioFromUrl();
+            }
+            if (onnxSession && audioBuffer) {
+                showStatus('inferenceStatus', 'success', 'Defaults loaded. You can run inference now.');
+            }
+        });
     </script>
 </body>
 
