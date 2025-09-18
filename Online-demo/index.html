@@ -469,6 +469,48 @@
             background: linear-gradient(45deg, #667eea, #764ba2);
         }
 
+        /* Enhancement controls */
+        .enhancement-panel {
+            background: rgba(102, 126, 234, 0.05);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .enhancement-panel h5 {
+            margin: 0 0 8px 0;
+            color: #667eea;
+            font-size: 1em;
+        }
+
+        .enhancement-controls label {
+            display: block;
+            font-size: 12px;
+            color: #555;
+            margin: 8px 0 6px 0;
+        }
+
+        .enhancement-categories {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .enhancement-categories label {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 16px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #444;
+        }
+
+        .enhancement-disabled {
+            opacity: 0.6;
+        }
+
         .playback-controls {
             display: flex;
             gap: 10px;
@@ -665,6 +707,24 @@
 
                 <!-- Right Panel - Blendshapes -->
                 <div class="right-panel">
+                    <div class="enhancement-panel" id="enhancementPanel">
+                        <h5>✨ Enhancement</h5>
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:500; color:#555;">
+                            <input type="checkbox" id="enhanceAllToggle">
+                            Enhance all emotions
+                        </label>
+                        <div id="enhancementInner" class="enhancement-disabled">
+                            <label for="enhancementSlider">Enhancement factor: <span
+                                    id="enhancementValue">1.00x</span></label>
+                            <input type="range" id="enhancementSlider" min="0.5" max="2.0" step="0.05" value="1.0">
+                            <div class="enhancement-categories">
+                                <label><input type="checkbox" id="cbMouth" checked> Mouth</label>
+                                <label><input type="checkbox" id="cbEyes" checked> Eyes</label>
+                                <label><input type="checkbox" id="cbJaw" checked> Jaw</label>
+                                <label><input type="checkbox" id="cbBrows" checked> Brows</label>
+                            </div>
+                        </div>
+                    </div>
                     <h4>🎭 Live Blendshapes</h4>
                     <div id="blendshapesPanel" class="blendshapes-panel">
                         <div style="text-align: center; color: #667eea; margin-top: 50px;">
@@ -796,6 +856,11 @@
         let animationId = null;
         let startTime = 0;
         let targetFPS = 30;
+
+        // Enhancement state
+        let enhancementEnabled = false;
+        let enhancementFactor = 1.0;
+        const enhancementCategories = { mouth: true, eyes: true, jaw: true, brows: true };
 
         // Blendshape names (52 blendshapes + 7 head pose values)
         const blendshapeNames = [
@@ -996,35 +1061,39 @@
             updateBlendshapesDisplay();
         }
 
+        // Category maps for enhancement
+        const CATEGORY_MAP = {
+            mouth: new Set([
+                'mouthClose', 'mouthDimpleLeft', 'mouthDimpleRight', 'mouthFrownLeft', 'mouthFrownRight', 'mouthFunnel', 'mouthLeft', 'mouthLowerDownLeft', 'mouthLowerDownRight', 'mouthPressLeft', 'mouthPressRight', 'mouthPucker', 'mouthRight', 'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper', 'mouthSmileLeft', 'mouthSmileRight', 'mouthStretchLeft', 'mouthStretchRight', 'mouthUpperUpLeft', 'mouthUpperUpRight'
+            ]),
+            eyes: new Set([
+                'eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight', 'eyeSquintLeft', 'eyeSquintRight', 'eyeWideLeft', 'eyeWideRight'
+            ]),
+            jaw: new Set([
+                'jawForward', 'jawLeft', 'jawOpen', 'jawRight'
+            ]),
+            brows: new Set([
+                'browDownLeft', 'browDownRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight'
+            ])
+        };
+
+        function getEnhancedValue(name, value) {
+            if (!enhancementEnabled) return value;
+            let factor = 1.0;
+            if (enhancementCategories.mouth && CATEGORY_MAP.mouth.has(name)) factor = enhancementFactor;
+            if (enhancementCategories.eyes && CATEGORY_MAP.eyes.has(name)) factor = enhancementFactor;
+            if (enhancementCategories.jaw && CATEGORY_MAP.jaw.has(name)) factor = enhancementFactor;
+            if (enhancementCategories.brows && CATEGORY_MAP.brows.has(name)) factor = enhancementFactor;
+            // Smoothly scale around zero, clamp to 1.0
+            return Math.min(value * factor, 1.0);
+        }
+
         // Process blendshapes with enhancements
         function processBlendshapes(blendshapes) {
             const coefsMap = new Map();
-
             for (const [name, value] of Object.entries(blendshapes)) {
-                let score = value;
-
-                // // Enhance certain expressions
-                // switch (name) {
-                //     case 'eyeBlinkLeft':
-                //     case 'eyeBlinkRight':
-                //         score *= 1.5;
-                //         break;
-                //     case 'browOuterUpLeft':
-                //     case 'browOuterUpRight':
-                //         score *= 1.3;
-                //         break;
-                //     case 'mouthSmileLeft':
-                //     case 'mouthSmileRight':
-                //         score *= 1.2;
-                //         break;
-                //     default:
-                //         score *= 1.0;
-
-                // }
-
-                coefsMap.set(name, Math.min(score, 1.0));
+                coefsMap.set(name, getEnhancedValue(name, value));
             }
-
             return coefsMap;
         }
 
@@ -2000,6 +2069,9 @@
 
             // Add event listeners
             setupPlaybackEventListeners();
+
+            // Initialize enhancement UI listeners once per setup
+            setupEnhancementUI();
         }
 
         // Setup event listeners for playback controls
@@ -2031,6 +2103,58 @@
             newFrameSlider.addEventListener('input', (e) => {
                 seekToFrame(parseInt(e.target.value));
             });
+        }
+
+        // Enhancement UI wiring
+        function setupEnhancementUI() {
+            const toggle = document.getElementById('enhanceAllToggle');
+            const inner = document.getElementById('enhancementInner');
+            const slider = document.getElementById('enhancementSlider');
+            const valueLabel = document.getElementById('enhancementValue');
+            const cbMouth = document.getElementById('cbMouth');
+            const cbEyes = document.getElementById('cbEyes');
+            const cbJaw = document.getElementById('cbJaw');
+            const cbBrows = document.getElementById('cbBrows');
+
+            if (!toggle || !inner || !slider || !valueLabel) return;
+
+            // Reflect current state
+            toggle.checked = enhancementEnabled;
+            inner.classList.toggle('enhancement-disabled', !enhancementEnabled);
+            slider.value = enhancementFactor.toFixed(2);
+            valueLabel.textContent = `${parseFloat(slider.value).toFixed(2)}x`;
+            if (cbMouth) cbMouth.checked = enhancementCategories.mouth;
+            if (cbEyes) cbEyes.checked = enhancementCategories.eyes;
+            if (cbJaw) cbJaw.checked = enhancementCategories.jaw;
+            if (cbBrows) cbBrows.checked = enhancementCategories.brows;
+
+            // Listeners
+            toggle.onchange = () => {
+                enhancementEnabled = toggle.checked;
+                inner.classList.toggle('enhancement-disabled', !enhancementEnabled);
+                reapplyCurrentFrameEnhancement();
+            };
+
+            slider.oninput = () => {
+                enhancementFactor = parseFloat(slider.value);
+                valueLabel.textContent = `${enhancementFactor.toFixed(2)}x`;
+                reapplyCurrentFrameEnhancement();
+            };
+
+            if (cbMouth) cbMouth.onchange = () => { enhancementCategories.mouth = cbMouth.checked; reapplyCurrentFrameEnhancement(); };
+            if (cbEyes) cbEyes.onchange = () => { enhancementCategories.eyes = cbEyes.checked; reapplyCurrentFrameEnhancement(); };
+            if (cbJaw) cbJaw.onchange = () => { enhancementCategories.jaw = cbJaw.checked; reapplyCurrentFrameEnhancement(); };
+            if (cbBrows) cbBrows.onchange = () => { enhancementCategories.brows = cbBrows.checked; reapplyCurrentFrameEnhancement(); };
+        }
+
+        function reapplyCurrentFrameEnhancement() {
+            if (!window.playbackData || window.playbackData.frames.length === 0) {
+                updateBlendshapesDisplay();
+                return;
+            }
+            // Re-apply current frame to reflect new enhancement setting
+            const frame = window.playbackData.frames[currentFrame] || window.playbackData.frames[0];
+            updateRaccoonFromFrame(frame);
         }
 
         // Playback control functions

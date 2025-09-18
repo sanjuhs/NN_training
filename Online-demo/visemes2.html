@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Viseme Baseline - Audio to Blendshapes</title>
+
+    <!-- Import map to resolve Three.js modules -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            text-align: center;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 22px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section {
+            background: rgba(102, 126, 234, 0.05);
+            border: 1px solid rgba(102, 126, 234, 0.12);
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .section h3 {
+            margin: 0 0 12px 0;
+            color: #667eea;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 999px;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+        }
+
+        button:disabled {
+            background: #c8c8c8;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .file-input {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-input input[type="file"] {
+            display: none;
+        }
+
+        .file-chip {
+            background: white;
+            border: 2px dashed #667eea;
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .status {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status.info {
+            background: rgba(52, 152, 219, 0.1);
+            color: #3498db;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            display: block;
+        }
+
+        .status.success {
+            background: rgba(46, 213, 115, 0.1);
+            color: #2ed573;
+            border: 1px solid rgba(46, 213, 115, 0.3);
+            display: block;
+        }
+
+        .status.error {
+            background: rgba(255, 87, 87, 0.1);
+            color: #ff5757;
+            border: 1px solid rgba(255, 87, 87, 0.3);
+            display: block;
+        }
+
+        .audio-preview {
+            margin-top: 10px;
+        }
+
+        audio {
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .progress {
+            height: 8px;
+            background: #eee;
+            border-radius: 999px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress>div {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.2s ease;
+        }
+
+        .scene {
+            height: 420px;
+            border-radius: 14px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scene-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #667eea;
+            text-align: center;
+        }
+
+        .pill {
+            background: rgba(102, 126, 234, 0.12);
+            color: #667eea;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+
+        .right-panel {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 12px;
+        }
+
+        .blendshapes-panel {
+            height: 280px;
+            overflow: auto;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(102, 126, 234, 0.18);
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .blend-item {
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .viseme-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .viseme-tag {
+            background: #fafafa;
+            border: 1px solid #eee;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+
+        .timeline {
+            height: 12px;
+            background: #eee;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .segment {
+            height: 100%;
+        }
+
+        .playback-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎙️ Viseme Baseline</h1>
+        <div class="subtitle">Heuristic audio → visemes → ARKit blendshapes (no NN)</div>
+
+        <div class="grid">
+            <div class="section">
+                <h3>1) Audio</h3>
+                <div class="row">
+                    <div class="controls">
+                        <button id="btnRecStart">Start Recording</button>
+                        <button id="btnRecStop" disabled>Stop</button>
+                        <button id="btnRecClear" disabled>Clear</button>
+                    </div>
+                    <div class="file-input">
+                        <label class="file-chip" for="fileAudio">📁 Choose audio (.wav/.mp3/.m4a/.webm)</label>
+                        <input id="fileAudio" type="file" accept=".wav,.mp3,.m4a,.webm" />
+                        <span id="audioName" class="pill" style="display:none;"></span>
+                    </div>
+                </div>
+                <div class="audio-preview" id="audioPreview" style="display:none;">
+                    <audio id="audioPlayer" controls></audio>
+                    <div id="audioInfo" class="pill" style="margin-top:8px;"></div>
+                </div>
+                <div id="audioStatus" class="status info" style="display:none;"></div>
+            </div>
+
+            <div class="section right-panel">
+                <div>
+                    <h3>2) Analyze Visemes</h3>
+                    <div class="row">
+                        <label class="pill">Target FPS: <select id="selFps">
+                                <option value="24">24</option>
+                                <option value="30" selected>30</option>
+                                <option value="60">60</option>
+                            </select></label>
+                        <button id="btnAnalyze" disabled>Analyze Visemes</button>
+                    </div>
+                    <div class="progress" style="margin-top:8px;">
+                        <div id="progressFill"></div>
+                    </div>
+                    <div id="anStatus" class="status info" style="display:none;"></div>
+                </div>
+                <div>
+                    <h3>3) Results</h3>
+                    <div class="viseme-row" id="visemeLegend"></div>
+                    <div class="timeline" id="visemeTimeline" style="margin-top:8px;"></div>
+                    <div class="row" style="margin-top:10px;">
+                        <a id="dlJson" class="pill" href="#" download style="display:none;text-decoration:none;">📥
+                            JSON</a>
+                        <a id="dlCsv" class="pill" href="#" download style="display:none;text-decoration:none;">📊
+                            CSV</a>
+                    </div>
+                </div>
+                <div>
+                    <h3>4) 3D Preview</h3>
+                    <div id="scene" class="scene">
+                        <div class="scene-loading" id="sceneLoading">Loading 3D...</div>
+                    </div>
+                    <div class="playback-controls" style="margin-top:10px;">
+                        <button id="btnPlay" disabled>▶️ Play</button>
+                        <button id="btnPause" disabled>⏸️ Pause</button>
+                        <button id="btnStop" disabled>⏹️ Stop</button>
+                    </div>
+                    <div class="row" style="margin-top:6px; align-items:center;">
+                        <span id="lblFrame" class="pill">Frame: 0/0</span>
+                        <input id="rangeFrame" type="range" min="0" max="0" value="0" style="flex:1;" />
+                    </div>
+                    <audio id="audioPlayerViz" controls style="width:100%; display:none; margin-top:8px;"></audio>
+                    <div class="section" style="margin-top:12px;">
+                        <h3>Enhancers</h3>
+                        <div class="row">
+                            <label class="pill" style="display:flex; gap:8px; align-items:center;">
+                                Jaw scale
+                                <input id="enhJaw" type="range" min="0.5" max="2.0" step="0.05" value="1.20" />
+                            </label>
+                            <label class="pill" style="display:flex; gap:8px; align-items:center;">
+                                Mouth scale
+                                <input id="enhMouth" type="range" min="0.5" max="2.0" step="0.05" value="1.10" />
+                            </label>
+                        </div>
+                        <div class="row" style="margin-top:6px;">
+                            <label class="pill" style="display:flex; gap:8px; align-items:center;">
+                                <input id="chkRandomize" type="checkbox" /> Randomize other movements
+                            </label>
+                            <label class="pill" style="display:flex; gap:8px; align-items:center;">
+                                Amount
+                                <input id="randAmount" type="range" min="0.00" max="0.50" step="0.01" value="0.08" />
+                            </label>
+                            <button id="btnShuffle">Shuffle</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // -------- Minimal FFT (fallback) --------
+        class FallbackFFT {
+            constructor(size) {
+                if ((size & (size - 1)) !== 0) throw new Error('FFT size must be power of two');
+                this.size = size;
+                const half = size >>> 1;
+                this.cosTable = new Float32Array(half);
+                this.sinTable = new Float32Array(half);
+                for (let i = 0; i < half; i++) {
+                    const ang = -2 * Math.PI * i / size;
+                    this.cosTable[i] = Math.cos(ang);
+                    this.sinTable[i] = Math.sin(ang);
+                }
+                this.bitRev = FallbackFFT._bitReverse(size);
+            }
+            createComplexArray() { return new Float32Array(this.size * 2); }
+            realTransform(out, input) {
+                const n = this.size;
+                const real = new Float32Array(n);
+                const imag = new Float32Array(n);
+                const len = Math.min(input.length, n);
+                for (let i = 0; i < len; i++) real[i] = input[i];
+                for (let i = 0; i < n; i++) {
+                    const j = this.bitRev[i];
+                    if (j > i) { [real[i], real[j]] = [real[j], real[i]];[imag[i], imag[j]] = [imag[j], imag[i]]; }
+                }
+                for (let step = 1; step < n; step <<= 1) {
+                    const jump = step << 1;
+                    const tblStep = n / jump;
+                    for (let i = 0; i < n; i += jump) {
+                        for (let j = 0; j < step; j++) {
+                            const k = (j * tblStep) | 0;
+                            const wr = this.cosTable[k];
+                            const wi = this.sinTable[k];
+                            const ir = real[i + j + step];
+                            const ii = imag[i + j + step];
+                            const tr = wr * ir - wi * ii;
+                            const ti = wr * ii + wi * ir;
+                            real[i + j + step] = real[i + j] - tr;
+                            imag[i + j + step] = imag[i + j] - ti;
+                            real[i + j] += tr;
+                            imag[i + j] += ti;
+                        }
+                    }
+                }
+                for (let i = 0; i < n; i++) { out[2 * i] = real[i]; out[2 * i + 1] = imag[i]; }
+            }
+            static _bitReverse(n) {
+                const out = new Uint32Array(n);
+                const bits = Math.log2(n) | 0;
+                for (let i = 0; i < n; i++) {
+                    let x = i, y = 0;
+                    for (let b = 0; b < bits; b++) { y = (y << 1) | (x & 1); x >>= 1; }
+                    out[i] = y >>> 0;
+                }
+                return out;
+            }
+        }
+        function getFFTClass() { return window.FFT || globalThis.FFT || FallbackFFT; }
+
+        // --------- Globals ---------
+        let audioBuffer = null;
+        let latestAudioUrl = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStream = null;
+
+        let scene, camera, renderer, controls;
+        let THREE, GLTFLoader, OrbitControls;
+        let gltfScene, morphMeshes = [];
+
+        let playback = { frames: [], fps: 30, cur: 0, playing: false, raf: null };
+
+        const visemeColors = {
+            'sil': '#cbd5e1', 'A': '#f59e0b', 'E': '#10b981', 'O': '#3b82f6', 'U': '#6366f1',
+            'F': '#f43f5e', 'S': '#22c55e', 'M': '#64748b', 'TH': '#ef4444', 'L': '#a855f7'
+        };
+
+        // --------- UI Elements ---------
+        const btnRecStart = document.getElementById('btnRecStart');
+        const btnRecStop = document.getElementById('btnRecStop');
+        const btnRecClear = document.getElementById('btnRecClear');
+        const fileAudio = document.getElementById('fileAudio');
+        const audioName = document.getElementById('audioName');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const audioPlayerViz = document.getElementById('audioPlayerViz');
+        const audioPreview = document.getElementById('audioPreview');
+        const audioInfo = document.getElementById('audioInfo');
+        const audioStatus = document.getElementById('audioStatus');
+
+        const btnAnalyze = document.getElementById('btnAnalyze');
+        const selFps = document.getElementById('selFps');
+        const progressFill = document.getElementById('progressFill');
+        const anStatus = document.getElementById('anStatus');
+
+        const sceneDiv = document.getElementById('scene');
+        const sceneLoading = document.getElementById('sceneLoading');
+        const btnPlay = document.getElementById('btnPlay');
+        const btnPause = document.getElementById('btnPause');
+        const btnStop = document.getElementById('btnStop');
+        const lblFrame = document.getElementById('lblFrame');
+        const rangeFrame = document.getElementById('rangeFrame');
+
+        const visemeLegend = document.getElementById('visemeLegend');
+        const visemeTimeline = document.getElementById('visemeTimeline');
+        const dlJson = document.getElementById('dlJson');
+        const dlCsv = document.getElementById('dlCsv');
+
+        // Enhancer UI
+        const enhJaw = document.getElementById('enhJaw');
+        const enhMouth = document.getElementById('enhMouth');
+        const chkRandomize = document.getElementById('chkRandomize');
+        const randAmount = document.getElementById('randAmount');
+        const btnShuffle = document.getElementById('btnShuffle');
+
+        // --------- Utils ---------
+        function show(el, type = 'block') { el.style.display = type; }
+        function hide(el) { el.style.display = 'none'; }
+        function setStatus(el, cls, msg) { el.className = `status ${cls}`; el.textContent = msg; el.style.display = 'block'; }
+        function setProgress(p) { progressFill.style.width = `${p}%`; }
+
+        // --------- Enhancer State ---------
+        const enh = {
+            jawScale: 1.20,
+            mouthScale: 1.10,
+            randomize: false,
+            randomAmount: 0.08,
+            randomSeed: Math.floor(Math.random() * 0xFFFFFFFF) >>> 0,
+        };
+        let allMorphKeys = new Set();
+
+        function isMouthKey(name) { return name.startsWith('mouth'); }
+        function isJawKey(name) { return name.startsWith('jaw'); }
+        function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+        function hashStringToUint(str) {
+            let h = 2166136261 >>> 0; // FNV-1a
+            for (let i = 0; i < str.length; i++) {
+                h ^= str.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return h >>> 0;
+        }
+        function mulberry32(seed) {
+            return function () {
+                let t = seed += 0x6D2B79F5;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function seededUnitRandom(name, frameIndex) {
+            const seed = (enh.randomSeed ^ (frameIndex | 0) ^ hashStringToUint(name)) >>> 0;
+            const rnd = mulberry32(seed);
+            return rnd(); // [0,1)
+        }
+
+        function enhanceBlendshapes(baseBlends, frameIndex) {
+            const out = {};
+            // Scale mouth and jaw
+            for (const [k, v] of Object.entries(baseBlends || {})) {
+                if (isJawKey(k)) out[k] = clamp01(v * enh.jawScale);
+                else if (isMouthKey(k)) out[k] = clamp01(v * enh.mouthScale);
+                else out[k] = clamp01(v);
+            }
+            // Randomize other movements (non-mouth/jaw)
+            if (enh.randomize && allMorphKeys.size) {
+                for (const name of allMorphKeys) {
+                    if (isJawKey(name) || isMouthKey(name)) continue;
+                    const base = out[name] || 0;
+                    const delta = seededUnitRandom(name, frameIndex) * enh.randomAmount; // 0..amount
+                    out[name] = clamp01(base + delta);
+                }
+            }
+            return out;
+        }
+
+        function refreshCurrentFrame() {
+            if (!playback.frames.length) return;
+            const fr = playback.frames[playback.cur];
+            applyBlendshapesToModel(enhanceBlendshapes(fr.blendshapes, playback.cur));
+        }
+
+        // Bind enhancer UI
+        enhJaw.addEventListener('input', () => { enh.jawScale = parseFloat(enhJaw.value) || 1.0; refreshCurrentFrame(); });
+        enhMouth.addEventListener('input', () => { enh.mouthScale = parseFloat(enhMouth.value) || 1.0; refreshCurrentFrame(); });
+        chkRandomize.addEventListener('change', () => { enh.randomize = !!chkRandomize.checked; refreshCurrentFrame(); });
+        randAmount.addEventListener('input', () => { enh.randomAmount = parseFloat(randAmount.value) || 0.0; refreshCurrentFrame(); });
+        btnShuffle.addEventListener('click', () => { enh.randomSeed = (Math.floor(Math.random() * 0xFFFFFFFF) >>> 0); refreshCurrentFrame(); });
+
+        // --------- Recording ---------
+        btnRecStart.onclick = async () => {
+            try {
+                recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
+                mediaRecorder = new MediaRecorder(recordingStream, mime ? { mimeType: mime } : undefined);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => { if (e.data?.size) audioChunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                    await loadAudioFromBlob(blob, 'recording.webm');
+                    btnRecClear.disabled = false;
+                };
+                mediaRecorder.start(100);
+                btnRecStart.disabled = true; btnRecStop.disabled = false; btnRecClear.disabled = true;
+                setStatus(audioStatus, 'info', 'Recording...');
+            } catch (e) {
+                setStatus(audioStatus, 'error', 'Microphone access failed');
+            }
+        };
+        btnRecStop.onclick = () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
+            btnRecStart.disabled = false; btnRecStop.disabled = true;
+            setStatus(audioStatus, 'info', 'Processing recording...');
+        };
+        btnRecClear.onclick = () => { clearAudio(); };
+
+        fileAudio.onchange = async (e) => {
+            const file = e.target.files?.[0]; if (!file) return;
+            await loadAudioFromBlob(file, file.name || 'audio');
+            btnRecClear.disabled = false;
+        };
+
+        function clearAudio() {
+            if (latestAudioUrl) { URL.revokeObjectURL(latestAudioUrl); latestAudioUrl = null; }
+            audioPlayer.src = '';
+            audioPlayerViz.src = '';
+            audioBuffer = null;
+            hide(audioPreview);
+            hide(audioStatus);
+            hide(dlJson); hide(dlCsv);
+            btnAnalyze.disabled = true;
+            btnRecClear.disabled = true;
+            audioName.textContent = '';
+            audioName.style.display = 'none';
+            visemeTimeline.innerHTML = '';
+            visemeLegend.innerHTML = '';
+            setPlaybackData([]);
+        }
+
+        async function loadAudioFromBlob(blob, name) {
+            try {
+                if (latestAudioUrl) { URL.revokeObjectURL(latestAudioUrl); latestAudioUrl = null; }
+                latestAudioUrl = URL.createObjectURL(blob);
+                audioPlayer.src = latestAudioUrl; show(audioPreview);
+                audioPlayerViz.src = latestAudioUrl; show(audioPlayerViz);
+                const arr = await blob.arrayBuffer();
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                audioBuffer = await ctx.decodeAudioData(arr);
+                audioName.textContent = name; audioName.style.display = 'inline-block';
+                audioInfo.textContent = `Duration: ${audioBuffer.duration.toFixed(2)}s | SR: ${audioBuffer.sampleRate} Hz`;
+                setStatus(audioStatus, 'success', 'Audio ready');
+                btnAnalyze.disabled = false;
+            } catch (e) {
+                setStatus(audioStatus, 'error', 'Failed to decode audio');
+                audioBuffer = null; btnAnalyze.disabled = true;
+            }
+        }
+
+        // --------- Analysis (Heuristic Visemes) ---------
+        btnAnalyze.onclick = async () => {
+            if (!audioBuffer) return;
+            btnAnalyze.disabled = true; setProgress(0);
+            setStatus(anStatus, 'info', 'Analyzing...');
+            try {
+                const targetFps = parseInt(selFps.value, 10) || 30;
+                const result = await analyzeVisemes(audioBuffer, targetFps);
+                setPlaybackData(result.frames, result.fps);
+                renderVisemeLegend(result.labelsSeen);
+                renderVisemeTimeline(result.frames, result.fps);
+                setupDownloads(result);
+                setStatus(anStatus, 'success', `Done. ${result.frames.length} frames @ ${result.fps} fps`);
+                setProgress(100);
+            } catch (e) {
+                console.error(e);
+                setStatus(anStatus, 'error', `Analysis failed: ${e.message}`);
+            } finally {
+                btnAnalyze.disabled = false;
+            }
+        };
+
+        async function analyzeVisemes(abuf, targetFps) {
+            // 1) Mono + resample -> 16k
+            const ch = abuf.numberOfChannels > 1 ? mixToMono(abuf) : abuf.getChannelData(0);
+            const x = linearResample(ch, abuf.sampleRate, 16000);
+
+            // 2) Frame for feature extraction (25ms win, 10ms hop)
+            const sr = 16000, win = 400, hop = 160, nFFT = 512;
+            const hann = buildHann(win);
+            const FFT = getFFTClass(); const f = new FFT(nFFT); const complex = f.createComplexArray();
+
+            const nFrames = Math.max(0, Math.floor((x.length - win) / hop) + 1);
+            const feats = [];
+            for (let t = 0; t < nFrames; t++) {
+                if ((t % 50) === 0) setProgress(Math.min(40, Math.round((t / Math.max(1, nFrames)) * 40)));
+                const start = t * hop;
+                const frame = new Float32Array(nFFT);
+                let sumsq = 0;
+                for (let i = 0; i < win; i++) { const v = (x[start + i] || 0) * hann[i]; frame[i] = v; sumsq += v * v; }
+                const rms = Math.sqrt(sumsq / win);
+                const zcr = computeZCR(frame, win);
+                f.realTransform(complex, frame);
+                // magnitude for positive freqs
+                const nFreqs = Math.floor(nFFT / 2) + 1;
+                let magSum = 0, cenNum = 0, geoLogSum = 0, cnt = 0; // for centroid & flatness
+                for (let k = 0; k < nFreqs; k++) {
+                    const rr = complex[2 * k], ii = complex[2 * k + 1];
+                    const mag = Math.hypot(rr, ii) + 1e-10;
+                    magSum += mag; cenNum += (k * mag);
+                    geoLogSum += Math.log(mag); cnt++;
+                }
+                const centroid = (magSum > 0) ? (cenNum / magSum) / nFreqs : 0;
+                const flatness = Math.exp(geoLogSum / Math.max(1, cnt)) / (magSum / Math.max(1, cnt));
+                feats.push({ rms, zcr, centroid, flatness });
+            }
+
+            // 3) Classify per analysis frame -> viseme label + intensity
+            const labels = [];
+            for (let i = 0; i < feats.length; i++) {
+                const v = classifyViseme(feats[i]);
+                // simple temporal smoothing (mode over small window)
+                const prev = labels[i - 1]?.label; if (prev && v.label !== prev && feats[i].rms < 0.04) v.label = prev;
+                labels.push(v);
+            }
+
+            // 4) Aggregate to target FPS frames (average over window)
+            const analysisFps = sr / hop; // ~100 fps
+            const aggRatio = analysisFps / targetFps;
+            const outFrames = [];
+            const labelsSeen = new Set();
+            for (let i = 0; i < Math.floor(labels.length / aggRatio); i++) {
+                const start = Math.floor(i * aggRatio);
+                const end = Math.min(labels.length, Math.floor((i + 1) * aggRatio));
+                const slice = labels.slice(start, end);
+                // choose dominant label by max sum intensity
+                const score = new Map();
+                let totalInt = 0;
+                slice.forEach(s => { const prev = score.get(s.label) || 0; score.set(s.label, prev + s.intensity); totalInt += s.intensity; });
+                let bestLabel = 'sil', bestVal = -1;
+                for (const [k, v] of score) { if (v > bestVal) { bestVal = v; bestLabel = k; } }
+                labelsSeen.add(bestLabel);
+                const intensity = totalInt / Math.max(1, slice.length);
+                const blends = visemeToBlendshapes(bestLabel, intensity);
+                outFrames.push({ viseme: bestLabel, blendshapes: blends });
+            }
+
+            return { fps: targetFps, frames: outFrames, labelsSeen: Array.from(labelsSeen) };
+        }
+
+        function buildHann(n) { const w = new Float32Array(n); for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)); return w; }
+        function mixToMono(abuf) {
+            const L = abuf.length; const chs = abuf.numberOfChannels; const out = new Float32Array(L);
+            for (let c = 0; c < chs; c++) { const d = abuf.getChannelData(c); for (let i = 0; i < L; i++) out[i] += d[i] / chs; }
+            return out;
+        }
+        function linearResample(x, src, dst) { if (src === dst) return x.slice(); const dur = x.length / src; const N = Math.round(dur * dst); const y = new Float32Array(N); const r = (x.length - 1) / (N - 1); for (let i = 0; i < N; i++) { const t = i * r; const i0 = Math.floor(t), i1 = Math.min(i0 + 1, x.length - 1), a = t - i0; y[i] = (1 - a) * x[i0] + a * x[i1]; } return y; }
+        function computeZCR(frame, n) { let z = 0; let prev = frame[0]; for (let i = 1; i < n; i++) { const v = frame[i]; if ((prev >= 0 && v < 0) || (prev < 0 && v >= 0)) z++; prev = v; } return z / n; }
+
+        function classifyViseme(f) {
+            const rms = f.rms; const z = f.zcr; const c = f.centroid; const flat = f.flatness;
+            if (rms < 0.015) return { label: 'sil', intensity: 0.0 };
+            // Fricatives (noisy, high centroid & flatness)
+            if (flat > 0.6 && c > 0.6) return { label: (c > 0.75 ? 'S' : 'F'), intensity: clamp(map(rms, 0.02, 0.15)) };
+            // Closed-ish 
+            if (z < 0.05 && c < 0.3 && rms < 0.08) return { label: 'M', intensity: clamp(map(0.08 - rms, 0.0, 0.08)) };
+            // Rounded
+            if (c < 0.35 && rms >= 0.05) return { label: (rms > 0.12 ? 'O' : 'U'), intensity: clamp(map(rms, 0.05, 0.18)) };
+            // Wide / smiley
+            if (c > 0.62 && z > 0.2) return { label: 'E', intensity: clamp(map(rms, 0.03, 0.15)) };
+            // Tongue forward-ish approximation
+            if (c > 0.45 && c < 0.6 && z < 0.25) return { label: 'L', intensity: clamp(map(rms, 0.03, 0.12)) };
+            // Default open
+            return { label: 'A', intensity: clamp(map(rms, 0.03, 0.18)) };
+        }
+        function map(v, a, b) { return (v - a) / (b - a + 1e-9); }
+        function clamp(v, lo = 0, hi = 1) { return Math.max(lo, Math.min(hi, v)); }
+
+        function visemeToBlendshapes(label, intensity) {
+            // Base all-zero map, fill when present. Symmetric L/R where applicable.
+            const bs = {};
+            const I = (v) => clamp(v * intensity);
+            const setLR = (nameLeft, nameRight, val) => { bs[nameLeft] = I(val); bs[nameRight] = I(val); };
+
+            switch (label) {
+                case 'sil':
+                    bs['mouthClose'] = I(0.9);
+                    bs['jawOpen'] = I(0.0);
+                    setLR('mouthPressLeft', 'mouthPressRight', 0.1);
+                    break;
+                case 'A': // Open jaw
+                    bs['jawOpen'] = I(0.75);
+                    setLR('mouthSmileLeft', 'mouthSmileRight', 0.15);
+                    setLR('mouthLowerDownLeft', 'mouthLowerDownRight', 0.35);
+                    bs['mouthClose'] = I(0.0);
+                    break;
+                case 'E': // Wide
+                    setLR('mouthSmileLeft', 'mouthSmileRight', 0.6);
+                    setLR('mouthStretchLeft', 'mouthStretchRight', 0.55);
+                    bs['jawOpen'] = I(0.2);
+                    bs['mouthClose'] = I(0.0);
+                    break;
+                case 'O': // Round/funnel
+                    bs['mouthFunnel'] = I(0.85);
+                    bs['mouthPucker'] = I(0.65);
+                    bs['jawOpen'] = I(0.3);
+                    bs['mouthClose'] = I(0.0);
+                    break;
+                case 'U': // Pucker
+                    bs['mouthPucker'] = I(0.85);
+                    bs['mouthFunnel'] = I(0.35);
+                    bs['jawOpen'] = I(0.18);
+                    bs['mouthClose'] = I(0.0);
+                    break;
+                case 'F': // Lower lip to teeth (approx)
+                    setLR('mouthLowerDownLeft', 'mouthLowerDownRight', 0.45);
+                    setLR('mouthPressLeft', 'mouthPressRight', 0.55);
+                    bs['jawOpen'] = I(0.15);
+                    bs['mouthClose'] = I(0.2);
+                    break;
+                case 'S': // Teeth together, narrow opening
+                    bs['jawOpen'] = I(0.12);
+                    bs['mouthClose'] = I(0.25);
+                    bs['mouthRollUpper'] = I(0.25);
+                    bs['mouthRollLower'] = I(0.25);
+                    break;
+                case 'M': // Closed and pressed
+                    bs['mouthClose'] = I(0.9);
+                    setLR('mouthPressLeft', 'mouthPressRight', 0.5);
+                    bs['jawOpen'] = I(0.05);
+                    break;
+                case 'TH': // Tongue between teeth (approximation)
+                    bs['jawOpen'] = I(0.25);
+                    setLR('mouthStretchLeft', 'mouthStretchRight', 0.25);
+                    bs['mouthClose'] = I(0.05);
+                    break;
+                case 'L': // Tongue up (approx)
+                    bs['jawOpen'] = I(0.28);
+                    bs['mouthRollUpper'] = I(0.2);
+                    setLR('mouthSmileLeft', 'mouthSmileRight', 0.15);
+                    break;
+                default:
+                    bs['jawOpen'] = I(0.3);
+            }
+            return bs;
+        }
+
+        // --------- Results rendering ---------
+        function renderVisemeLegend(labels) {
+            visemeLegend.innerHTML = '';
+            labels.sort().forEach(l => {
+                const span = document.createElement('span');
+                span.className = 'viseme-tag';
+                span.style.borderColor = visemeColors[l] || '#ddd';
+                span.style.color = '#333';
+                span.textContent = l;
+                visemeLegend.appendChild(span);
+            });
+        }
+        function renderVisemeTimeline(frames, fps) {
+            visemeTimeline.innerHTML = '';
+            const total = frames.length;
+            let curLabel = null, curStart = 0;
+            function pushSeg(label, start, end) {
+                if (label == null) return;
+                const seg = document.createElement('div');
+                const w = ((end - start) / total) * 100;
+                seg.className = 'segment';
+                seg.style.width = `${w}%`;
+                seg.style.background = visemeColors[label] || '#ddd';
+                seg.title = `${label} ${(end - start) / fps}s`;
+                visemeTimeline.appendChild(seg);
+            }
+            for (let i = 0; i < total; i++) {
+                const l = frames[i].viseme;
+                if (curLabel === null) { curLabel = l; curStart = i; }
+                else if (l !== curLabel) { pushSeg(curLabel, curStart, i); curLabel = l; curStart = i; }
+            }
+            pushSeg(curLabel, curStart, total);
+        }
+
+        function setupDownloads(result) {
+            const json = JSON.stringify(result, null, 2);
+            const jsonBlob = new Blob([json], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            dlJson.href = jsonUrl; dlJson.download = `viseme_result_${Date.now()}.json`; show(dlJson, 'inline-block');
+
+            const csv = toCSV(result);
+            const csvBlob = new Blob([csv], { type: 'text/csv' });
+            const csvUrl = URL.createObjectURL(csvBlob);
+            dlCsv.href = csvUrl; dlCsv.download = `viseme_result_${Date.now()}.csv`; show(dlCsv, 'inline-block');
+        }
+        function toCSV(result) {
+            const headers = ['frame_index', 'viseme', 'timestamp_ms'];
+            // Add a few common ARKit blendshape headers
+            const extra = ['jawOpen', 'mouthClose', 'mouthFunnel', 'mouthPucker', 'mouthSmileLeft', 'mouthSmileRight', 'mouthStretchLeft', 'mouthStretchRight', 'mouthRollUpper', 'mouthRollLower', 'mouthPressLeft', 'mouthPressRight', 'mouthLowerDownLeft', 'mouthLowerDownRight'];
+            const all = headers.concat(extra);
+            let csv = all.join(',') + '\n';
+            result.frames.forEach((fr, i) => {
+                const row = [i, fr.viseme, Math.round((i / result.fps) * 1000)];
+                extra.forEach(k => row.push(fr.blendshapes[k] ?? 0));
+                csv += row.join(',') + '\n';
+            });
+            return csv;
+        }
+
+        // --------- 3D Scene & Animation ---------
+        async function ensureScene() {
+            if (THREE) return;
+            THREE = await import('three');
+            ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+            ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
+
+            const w = sceneDiv.clientWidth, h = sceneDiv.clientHeight;
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x1a1a1a);
+            camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100); camera.position.set(0, 0, 4);
+            renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setSize(w, h); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+            sceneDiv.innerHTML = ''; sceneDiv.appendChild(renderer.domElement);
+
+            const amb = new THREE.AmbientLight(0xffffff, 0.85); scene.add(amb);
+            const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(2, 2, 3); scene.add(dir);
+            const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-2, 1, 2); scene.add(fill);
+
+            controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05; controls.target.set(0, 0, 0); controls.update();
+
+            await loadRaccoon();
+            animateLoop();
+        }
+
+        async function loadRaccoon() {
+            return new Promise((resolve, reject) => {
+                const loader = new GLTFLoader();
+                loader.load(
+                    'https://storage.googleapis.com/mediapipe-tasks/face_landmarker/raccoon_head.glb',
+                    (gltf) => {
+                        if (gltfScene) { scene.remove(gltfScene); morphMeshes = []; }
+                        gltfScene = gltf.scene; scene.add(gltfScene);
+                        // Normalize scale & center
+                        const box = new THREE.Box3().setFromObject(gltfScene);
+                        const size = box.getSize(new THREE.Vector3());
+                        const center = box.getCenter(new THREE.Vector3());
+                        gltfScene.position.sub(center);
+                        const s = 1.6 / Math.max(size.x, size.y, size.z);
+                        gltfScene.scale.setScalar(s);
+
+                        gltfScene.traverse(o => {
+                            if (o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences) { morphMeshes.push(o); }
+                        });
+                        // Collect available morph target names for randomization
+                        allMorphKeys = new Set();
+                        for (const m of morphMeshes) {
+                            const dict = m.morphTargetDictionary || {};
+                            for (const name of Object.keys(dict)) allMorphKeys.add(name);
+                        }
+                        resolve();
+                    },
+                    undefined,
+                    (err) => { console.error('Model load error', err); reject(err); }
+                );
+            });
+        }
+
+        function animateLoop() {
+            requestAnimationFrame(animateLoop);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function applyBlendshapesToModel(blends) {
+            if (!morphMeshes.length) return;
+            for (const mesh of morphMeshes) {
+                const dict = mesh.morphTargetDictionary;
+                const infl = mesh.morphTargetInfluences;
+                if (!dict || !infl) continue;
+                for (const [name, val] of Object.entries(blends)) {
+                    if (name in dict) {
+                        const idx = dict[name];
+                        if (infl[idx] != null) { infl[idx] = THREE.MathUtils.lerp(infl[idx], val, 0.35); }
+                    }
+                }
+            }
+        }
+
+        function setPlaybackData(frames, fps = 30) {
+            playback.frames = frames || []; playback.fps = fps; playback.cur = 0; playback.playing = false;
+            lblFrame.textContent = `Frame: ${frames.length ? 1 : 0}/${frames.length}`;
+            rangeFrame.max = Math.max(0, frames.length - 1).toString();
+            rangeFrame.value = '0';
+            btnPlay.disabled = !frames.length; btnPause.disabled = true; btnStop.disabled = !frames.length;
+            if (frames.length) ensureScene().then(() => { applyBlendshapesToModel(enhanceBlendshapes(frames[0].blendshapes, 0)); });
+        }
+
+        function tickPlayback() {
+            if (!playback.playing) return;
+            const next = playback.cur + 1;
+            if (next >= playback.frames.length) { pausePlayback(); return; }
+            playback.cur = next;
+            const fr = playback.frames[playback.cur];
+            applyBlendshapesToModel(enhanceBlendshapes(fr.blendshapes, playback.cur));
+            lblFrame.textContent = `Frame: ${playback.cur + 1}/${playback.frames.length}`;
+            rangeFrame.value = playback.cur.toString();
+            playback.raf = setTimeout(tickPlayback, 1000 / playback.fps);
+        }
+
+        function playPlayback() {
+            if (!playback.frames.length) return;
+            playback.playing = true;
+            btnPlay.disabled = true; btnPause.disabled = false; btnStop.disabled = false; rangeFrame.disabled = true;
+            // align audio to current frame
+            if (audioPlayerViz.src) { audioPlayerViz.currentTime = playback.cur / playback.fps; audioPlayerViz.play().catch(() => { }); }
+            tickPlayback();
+        }
+        function pausePlayback() {
+            playback.playing = false;
+            btnPlay.disabled = false; btnPause.disabled = true; rangeFrame.disabled = false;
+            if (playback.raf) { clearTimeout(playback.raf); playback.raf = null; }
+            if (audioPlayerViz) audioPlayerViz.pause();
+        }
+        function stopPlayback() {
+            pausePlayback();
+            playback.cur = 0;
+            if (playback.frames.length) { applyBlendshapesToModel(enhanceBlendshapes(playback.frames[0].blendshapes, 0)); }
+            lblFrame.textContent = `Frame: ${playback.frames.length ? 1 : 0}/${playback.frames.length}`;
+            rangeFrame.value = '0';
+            if (audioPlayerViz) audioPlayerViz.currentTime = 0;
+        }
+
+        btnPlay.onclick = playPlayback;
+        btnPause.onclick = pausePlayback;
+        btnStop.onclick = stopPlayback;
+        rangeFrame.oninput = (e) => {
+            const idx = parseInt(e.target.value, 10) | 0; playback.cur = Math.max(0, Math.min(idx, playback.frames.length - 1));
+            if (playback.frames.length) { applyBlendshapesToModel(enhanceBlendshapes(playback.frames[playback.cur].blendshapes, playback.cur)); }
+            lblFrame.textContent = `Frame: ${playback.cur + 1}/${playback.frames.length}`;
+            if (audioPlayerViz && audioPlayerViz.src) { audioPlayerViz.currentTime = playback.cur / playback.fps; }
+        };
+
+        window.addEventListener('resize', () => {
+            if (!renderer || !camera) return;
+            const w = sceneDiv.clientWidth, h = sceneDiv.clientHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>
