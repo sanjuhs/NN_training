@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Comparison - ONNX vs Viseme Heuristic</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/fft.js@0.3.0/dist/fft.min.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            text-align: center;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 22px;
+        }
+
+        .section {
+            background: rgba(102, 126, 234, 0.05);
+            border: 1px solid rgba(102, 126, 234, 0.12);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 999px;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+        }
+
+        button:disabled {
+            background: #c8c8c8;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .file-chip {
+            background: white;
+            border: 2px dashed #667eea;
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .pill {
+            background: rgba(102, 126, 234, 0.12);
+            color: #667eea;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+
+        .status {
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-weight: 500;
+            display: none;
+            margin-top: 10px;
+        }
+
+        .status.info {
+            background: rgba(52, 152, 219, 0.1);
+            color: #3498db;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            display: block;
+        }
+
+        .status.success {
+            background: rgba(46, 213, 115, 0.1);
+            color: #2ed573;
+            border: 1px solid rgba(46, 213, 115, 0.3);
+            display: block;
+        }
+
+        .status.error {
+            background: rgba(255, 87, 87, 0.1);
+            color: #ff5757;
+            border: 1px solid rgba(255, 87, 87, 0.3);
+            display: block;
+        }
+
+        .audio-preview {
+            margin-top: 10px;
+        }
+
+        audio {
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .scene {
+            height: 420px;
+            border-radius: 14px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scene-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #667eea;
+            text-align: center;
+        }
+
+        .viewer-title {
+            text-align: center;
+            color: #667eea;
+            margin: 6px 0 10px;
+            font-weight: 600;
+        }
+
+        .progress {
+            height: 8px;
+            background: #eee;
+            border-radius: 999px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress>div {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.2s ease;
+        }
+
+        .playback {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎙️ ONNX vs Heuristic Viseme — Side-by-side</h1>
+        <div class="subtitle">Record/upload/load audio → compare NN predictions vs heuristic visemes on raccoon heads
+        </div>
+
+        <div class="section">
+            <h3>1) Audio</h3>
+            <div class="row">
+                <div class="controls">
+                    <button id="btnRecStart">Start Recording</button>
+                    <button id="btnRecStop" disabled>Stop</button>
+                    <button id="btnRecClear" disabled>Clear</button>
+                </div>
+                <label class="file-chip" for="fileAudio">📁 Choose audio (.wav/.mp3/.m4a/.webm)</label>
+                <input id="fileAudio" type="file" accept=".wav,.mp3,.m4a,.webm" />
+                <button id="btnLoadDefaultAudio">⬇️ Load default audio</button>
+                <span id="audioName" class="pill" style="display:none;"></span>
+            </div>
+            <div class="audio-preview" id="audioPreview" style="display:none;">
+                <audio id="audioPlayer" controls></audio>
+                <div id="audioInfo" class="pill" style="margin-top:8px;"></div>
+            </div>
+            <div id="audioStatus" class="status info" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>2) Run</h3>
+            <div class="row">
+                <label class="pill">Target FPS: <select id="selFps">
+                        <option value="24">24</option>
+                        <option value="30" selected>30</option>
+                        <option value="60">60</option>
+                    </select></label>
+                <button id="btnAnalyzeViseme" disabled>Analyze Viseme (Heuristic)</button>
+                <button id="btnRunOnnx" disabled>Run ONNX (NN)</button>
+                <button id="btnRunBoth" disabled>Run Both</button>
+            </div>
+            <div class="progress">
+                <div id="progressViseme"></div>
+            </div>
+            <div class="progress">
+                <div id="progressOnnx"></div>
+            </div>
+            <div id="runStatus" class="status info" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>Enhancer</h3>
+            <div class="row">
+                <label class="pill" style="display:flex; gap:8px; align-items:center;">
+                    Movement scale
+                    <input id="enhScale" type="range" min="0.5" max="2.0" step="0.05" value="1.00" />
+                </label>
+                <span id="enhScaleVal" class="pill">1.00x</span>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="section">
+                <div class="viewer-title">Heuristic Viseme → Blendshapes</div>
+                <div id="sceneViseme" class="scene">
+                    <div class="scene-loading" id="loadingViseme">Loading 3D...</div>
+                </div>
+                <div class="row" style="margin-top:6px; align-items:center;">
+                    <span id="lblFrameViseme" class="pill">Frame: 0/0</span>
+                    <input id="rangeViseme" type="range" min="0" max="0" value="0" style="flex:1;" />
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="viewer-title">ONNX (Neural Network) → Blendshapes</div>
+                <div id="sceneOnnx" class="scene">
+                    <div class="scene-loading" id="loadingOnnx">Loading 3D...</div>
+                </div>
+                <div class="row" style="margin-top:6px; align-items:center;">
+                    <span id="lblFrameOnnx" class="pill">Frame: 0/0</span>
+                    <input id="rangeOnnx" type="range" min="0" max="0" value="0" style="flex:1;" />
+                </div>
+            </div>
+        </div>
+
+        <div class="playback">
+            <button id="btnPlay" disabled>▶️ Play Both</button>
+            <button id="btnPause" disabled>⏸️ Pause</button>
+            <button id="btnStop" disabled>⏹️ Stop</button>
+            <audio id="audioPlayerViz" controls style="flex:1; display:none;"></audio>
+        </div>
+        <div class="pill" style="margin-top:8px; text-align:center;">If they want to replay, they got to first press
+            stop and then again press play.</div>
+    </div>
+
+    <script type="module">
+        // ---- Minimal FFT fallback ----
+        class FallbackFFT { constructor(size) { if ((size & (size - 1)) !== 0) throw new Error('FFT size must be power of two'); this.size = size; const h = size >>> 1; this.cos = new Float32Array(h); this.sin = new Float32Array(h); for (let i = 0; i < h; i++) { const a = -2 * Math.PI * i / size; this.cos[i] = Math.cos(a); this.sin[i] = Math.sin(a); } this.rev = FallbackFFT._bitReverse(size); } createComplexArray() { return new Float32Array(this.size * 2); } realTransform(out, input) { const n = this.size; const r = new Float32Array(n), im = new Float32Array(n); const len = Math.min(input.length, n); for (let i = 0; i < len; i++) r[i] = input[i]; for (let i = 0; i < n; i++) { const j = this.rev[i]; if (j > i) { [r[i], r[j]] = [r[j], r[i]];[im[i], im[j]] = [im[j], im[i]]; } } for (let step = 1; step < n; step <<= 1) { const jump = step << 1, ts = n / jump; for (let i = 0; i < n; i += jump) { for (let j = 0; j < step; j++) { const k = (j * ts) | 0, wr = this.cos[k], wi = this.sin[k]; const ir = r[i + j + step], ii = im[i + j + step]; const tr = wr * ir - wi * ii, ti = wr * ii + wi * ir; r[i + j + step] = r[i + j] - tr; im[i + j + step] = im[i + j] - ti; r[i + j] += tr; im[i + j] += ti; } } } for (let i = 0; i < n; i++) { out[2 * i] = r[i]; out[2 * i + 1] = im[i]; } } static _bitReverse(n) { const out = new Uint32Array(n); const b = Math.log2(n) | 0; for (let i = 0; i < n; i++) { let x = i, y = 0; for (let t = 0; t < b; t++) { y = (y << 1) | (x & 1); x >>= 1; } out[i] = y >>> 0; } return out; } }
+        function getFFTClass() { return window.FFT || globalThis.FFT || FallbackFFT; }
+
+        // ---- Globals ----
+        let audioBuffer = null, latestAudioUrl = null, mediaRecorder = null, recordingStream = null, audioChunks = [];
+        let THREE, GLTFLoader, OrbitControls;
+
+        // Viewers (two independent scenes)
+        const viewers = {
+            viseme: { scene: null, camera: null, renderer: null, controls: null, gltf: null, meshes: [], frames: [], fps: 30, cur: 0 },
+            onnx: { scene: null, camera: null, renderer: null, controls: null, gltf: null, meshes: [], frames: [], fps: 30, cur: 0 }
+        };
+
+        // ONNX model session
+        let onnxSession = null;
+
+        // Playback
+        let isPlaying = false, targetFPS = 30, rafId = null, startTime = 0;
+        // Enhancer
+        let movementScale = 1.0;
+
+        // UI elements
+        const btnRecStart = document.getElementById('btnRecStart');
+        const btnRecStop = document.getElementById('btnRecStop');
+        const btnRecClear = document.getElementById('btnRecClear');
+        const fileAudio = document.getElementById('fileAudio');
+        const btnLoadDefaultAudio = document.getElementById('btnLoadDefaultAudio');
+        const audioName = document.getElementById('audioName');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const audioPlayerViz = document.getElementById('audioPlayerViz');
+        const audioPreview = document.getElementById('audioPreview');
+        const audioInfo = document.getElementById('audioInfo');
+        const audioStatus = document.getElementById('audioStatus');
+
+        const btnAnalyzeViseme = document.getElementById('btnAnalyzeViseme');
+        const btnRunOnnx = document.getElementById('btnRunOnnx');
+        const btnRunBoth = document.getElementById('btnRunBoth');
+        const selFps = document.getElementById('selFps');
+        const progressViseme = document.getElementById('progressViseme');
+        const progressOnnx = document.getElementById('progressOnnx');
+        const runStatus = document.getElementById('runStatus');
+
+        const sceneViseme = document.getElementById('sceneViseme');
+        const sceneOnnx = document.getElementById('sceneOnnx');
+        const lblFrameViseme = document.getElementById('lblFrameViseme');
+        const lblFrameOnnx = document.getElementById('lblFrameOnnx');
+        const rangeViseme = document.getElementById('rangeViseme');
+        const rangeOnnx = document.getElementById('rangeOnnx');
+
+        const btnPlay = document.getElementById('btnPlay');
+        const btnPause = document.getElementById('btnPause');
+        const btnStop = document.getElementById('btnStop');
+        const enhScale = document.getElementById('enhScale');
+        const enhScaleVal = document.getElementById('enhScaleVal');
+
+        const DEFAULT_MODEL_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/best_tcn_model_train_50.onnx';
+        const DEFAULT_AUDIO_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav';
+
+        // ---- Utils ----
+        function setStatus(el, cls, msg) { el.className = `status ${cls}`; el.textContent = msg; el.style.display = 'block'; }
+        function setProgress(el, p) { el.style.width = `${Math.max(0, Math.min(100, p))}%`; }
+        function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+        // ---- Three.js scene helpers ----
+        async function ensureThree() { if (THREE) return; THREE = await import('three'); ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js')); ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js')); }
+
+        async function initViewer(which) {
+            await ensureThree();
+            const container = which === 'viseme' ? sceneViseme : sceneOnnx;
+            const v = viewers[which];
+            const w = container.clientWidth, h = container.clientHeight;
+            v.scene = new THREE.Scene(); v.scene.background = new THREE.Color(0x1a1a1a);
+            v.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100); v.camera.position.set(0, 0, 4);
+            v.renderer = new THREE.WebGLRenderer({ antialias: true }); v.renderer.setSize(w, h); v.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+            container.innerHTML = ''; container.appendChild(v.renderer.domElement);
+            const amb = new THREE.AmbientLight(0xffffff, 0.85); v.scene.add(amb);
+            const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(2, 2, 3); v.scene.add(dir);
+            const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-2, 1, 2); v.scene.add(fill);
+            v.controls = new OrbitControls(v.camera, v.renderer.domElement); v.controls.enableDamping = true; v.controls.dampingFactor = 0.05; v.controls.target.set(0, 0, 0); v.controls.update();
+            await loadRaccoon(which);
+        }
+
+        async function loadRaccoon(which) {
+            const v = viewers[which];
+            return new Promise((resolve, reject) => {
+                const loader = new GLTFLoader();
+                loader.load(
+                    'https://storage.googleapis.com/mediapipe-tasks/face_landmarker/raccoon_head.glb',
+                    (gltf) => {
+                        if (v.gltf) { v.scene.remove(v.gltf); v.meshes = []; }
+                        v.gltf = gltf.scene; v.scene.add(v.gltf);
+                        const box = new THREE.Box3().setFromObject(v.gltf);
+                        const size = box.getSize(new THREE.Vector3());
+                        const center = box.getCenter(new THREE.Vector3());
+                        v.gltf.position.sub(center);
+                        const s = 1.6 / Math.max(size.x, size.y, size.z);
+                        v.gltf.scale.setScalar(s);
+                        v.gltf.traverse(o => { if (o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences) { v.meshes.push(o); } });
+                        resolve();
+                    }, undefined, (err) => { console.error('Model load error', err); reject(err); }
+                );
+            });
+        }
+
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            for (const k of Object.keys(viewers)) {
+                const v = viewers[k];
+                if (v.controls) v.controls.update();
+                if (v.renderer && v.scene && v.camera) v.renderer.render(v.scene, v.camera);
+            }
+        }
+
+        function applyBlendshapes(which, blends) {
+            const v = viewers[which]; if (!v || !v.meshes.length) return;
+            for (const mesh of v.meshes) {
+                const dict = mesh.morphTargetDictionary, infl = mesh.morphTargetInfluences; if (!dict || !infl) continue;
+                for (const [name, val] of Object.entries(blends || {})) {
+                    if (name in dict) {
+                        const idx = dict[name]; if (infl[idx] != null) {
+                            const target = clamp01((val || 0) * movementScale);
+                            infl[idx] = THREE.MathUtils.lerp(infl[idx], target, 0.35);
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateFrameLabels() {
+            const vV = viewers.viseme, vO = viewers.onnx;
+            lblFrameViseme.textContent = `Frame: ${vV.frames.length ? (vV.cur + 1) : 0}/${vV.frames.length}`;
+            lblFrameOnnx.textContent = `Frame: ${vO.frames.length ? (vO.cur + 1) : 0}/${vO.frames.length}`;
+            rangeViseme.max = Math.max(0, vV.frames.length - 1).toString(); rangeViseme.value = vV.cur.toString();
+            rangeOnnx.max = Math.max(0, vO.frames.length - 1).toString(); rangeOnnx.value = vO.cur.toString();
+        }
+
+        // ---- Audio handling ----
+        btnRecStart.onclick = async () => {
+            try {
+                recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mime = (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) ? 'audio/webm;codecs=opus' : '';
+                mediaRecorder = new MediaRecorder(recordingStream, mime ? { mimeType: mime } : undefined);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => { if (e.data?.size) audioChunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                    await loadAudioFromBlob(blob, 'recording.webm');
+                    btnRecClear.disabled = false;
+                };
+                mediaRecorder.start(100);
+                btnRecStart.disabled = true; btnRecStop.disabled = false; btnRecClear.disabled = true;
+                setStatus(audioStatus, 'info', 'Recording...');
+            } catch (e) {
+                setStatus(audioStatus, 'error', 'Microphone access failed');
+            }
+        };
+        btnRecStop.onclick = () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
+            btnRecStart.disabled = false; btnRecStop.disabled = true;
+            setStatus(audioStatus, 'info', 'Processing recording...');
+        };
+        btnRecClear.onclick = () => { clearAudio(); };
+        fileAudio.onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; await loadAudioFromBlob(f, f.name || 'audio'); btnRecClear.disabled = false; };
+        btnLoadDefaultAudio.onclick = async () => { try { const resp = await fetch(DEFAULT_AUDIO_URL, { cache: 'no-store' }); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); const blob = await resp.blob(); await loadAudioFromBlob(blob, 'sample-audio.wav'); btnRecClear.disabled = true; } catch (e) { setStatus(audioStatus, 'error', `Load default failed: ${e.message}`); } };
+
+        function clearAudio() { if (latestAudioUrl) { URL.revokeObjectURL(latestAudioUrl); latestAudioUrl = null; } audioPlayer.src = ''; audioPlayerViz.src = ''; audioBuffer = null; audioPreview.style.display = 'none'; audioStatus.style.display = 'none'; audioName.textContent = ''; audioName.style.display = 'none'; updateEnableStates(); setPlaybackData('viseme', [], 30); setPlaybackData('onnx', [], 30); }
+
+        async function loadAudioFromBlob(blob, name) { try { if (latestAudioUrl) { URL.revokeObjectURL(latestAudioUrl); latestAudioUrl = null; } latestAudioUrl = URL.createObjectURL(blob); audioPlayer.src = latestAudioUrl; audioPlayerViz.src = latestAudioUrl; audioPreview.style.display = 'block'; const arr = await blob.arrayBuffer(); const ctx = new (window.AudioContext || window.webkitAudioContext)(); audioBuffer = await ctx.decodeAudioData(arr); audioName.textContent = name; audioName.style.display = 'inline-block'; audioInfo.textContent = `Duration: ${audioBuffer.duration.toFixed(2)}s | SR: ${audioBuffer.sampleRate} Hz`; setStatus(audioStatus, 'success', 'Audio ready'); updateEnableStates(); } catch (e) { setStatus(audioStatus, 'error', 'Failed to decode audio'); audioBuffer = null; updateEnableStates(); } }
+
+        function updateEnableStates() { const hasAudio = !!audioBuffer; btnAnalyzeViseme.disabled = !hasAudio; btnRunOnnx.disabled = !(hasAudio && onnxSession); btnRunBoth.disabled = !(hasAudio && onnxSession); btnPlay.disabled = !(viewers.viseme.frames.length || viewers.onnx.frames.length); btnPause.disabled = true; btnStop.disabled = !btnPlay.disabled; }
+
+        // ---- Heuristic Viseme pipeline (reuse from visemes2) ----
+        function buildHann(n) { const w = new Float32Array(n); for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)); return w; }
+        function mixToMono(abuf) { const L = abuf.length, chs = abuf.numberOfChannels; const out = new Float32Array(L); for (let c = 0; c < chs; c++) { const d = abuf.getChannelData(c); for (let i = 0; i < L; i++) out[i] += d[i] / chs; } return out; }
+        function linearResample(x, src, dst) { if (src === dst) return x.slice(); const dur = x.length / src; const N = Math.round(dur * dst); const y = new Float32Array(N); const r = (x.length - 1) / (N - 1); for (let i = 0; i < N; i++) { const t = i * r; const i0 = Math.floor(t), i1 = Math.min(i0 + 1, x.length - 1), a = t - i0; y[i] = (1 - a) * x[i0] + a * x[i1]; } return y; }
+        function computeZCR(frame, n) { let z = 0, prev = frame[0]; for (let i = 1; i < n; i++) { const v = frame[i]; if ((prev >= 0 && v < 0) || (prev < 0 && v >= 0)) z++; prev = v; } return z / n; }
+        function map(v, a, b) { return (v - a) / (b - a + 1e-9); }
+        function clamp(v, lo = 0, hi = 1) { return Math.max(lo, Math.min(hi, v)); }
+        function classifyViseme(f) { const rms = f.rms, z = f.zcr, c = f.centroid, flat = f.flatness; if (rms < 0.015) return { label: 'sil', intensity: 0.0 }; if (flat > 0.6 && c > 0.6) return { label: (c > 0.75 ? 'S' : 'F'), intensity: clamp(map(rms, 0.02, 0.15)) }; if (z < 0.05 && c < 0.3 && rms < 0.08) return { label: 'M', intensity: clamp(map(0.08 - rms, 0.0, 0.08)) }; if (c < 0.35 && rms >= 0.05) return { label: (rms > 0.12 ? 'O' : 'U'), intensity: clamp(map(rms, 0.05, 0.18)) }; if (c > 0.62 && z > 0.2) return { label: 'E', intensity: clamp(map(rms, 0.03, 0.15)) }; if (c > 0.45 && c < 0.6 && z < 0.25) return { label: 'L', intensity: clamp(map(rms, 0.03, 0.12)) }; return { label: 'A', intensity: clamp(map(rms, 0.03, 0.18)) }; }
+        function visemeToBlendshapes(label, intensity) { const bs = {}; const I = (v) => clamp(v * intensity); const setLR = (l, r, val) => { bs[l] = I(val); bs[r] = I(val); }; switch (label) { case 'sil': bs['mouthClose'] = I(0.9); bs['jawOpen'] = I(0.0); setLR('mouthPressLeft', 'mouthPressRight', 0.1); break; case 'A': bs['jawOpen'] = I(0.75); setLR('mouthSmileLeft', 'mouthSmileRight', 0.15); setLR('mouthLowerDownLeft', 'mouthLowerDownRight', 0.35); bs['mouthClose'] = I(0.0); break; case 'E': setLR('mouthSmileLeft', 'mouthSmileRight', 0.6); setLR('mouthStretchLeft', 'mouthStretchRight', 0.55); bs['jawOpen'] = I(0.2); bs['mouthClose'] = I(0.0); break; case 'O': bs['mouthFunnel'] = I(0.85); bs['mouthPucker'] = I(0.65); bs['jawOpen'] = I(0.3); bs['mouthClose'] = I(0.0); break; case 'U': bs['mouthPucker'] = I(0.85); bs['mouthFunnel'] = I(0.35); bs['jawOpen'] = I(0.18); bs['mouthClose'] = I(0.0); break; case 'F': setLR('mouthLowerDownLeft', 'mouthLowerDownRight', 0.45); setLR('mouthPressLeft', 'mouthPressRight', 0.55); bs['jawOpen'] = I(0.15); bs['mouthClose'] = I(0.2); break; case 'S': bs['jawOpen'] = I(0.12); bs['mouthClose'] = I(0.25); bs['mouthRollUpper'] = I(0.25); bs['mouthRollLower'] = I(0.25); break; case 'M': bs['mouthClose'] = I(0.9); setLR('mouthPressLeft', 'mouthPressRight', 0.5); bs['jawOpen'] = I(0.05); break; case 'TH': bs['jawOpen'] = I(0.25); setLR('mouthStretchLeft', 'mouthStretchRight', 0.25); bs['mouthClose'] = I(0.05); break; case 'L': bs['jawOpen'] = I(0.28); bs['mouthRollUpper'] = I(0.2); setLR('mouthSmileLeft', 'mouthSmileRight', 0.15); break; default: bs['jawOpen'] = I(0.3); } return bs; }
+
+        async function analyzeVisemes(abuf, targetFps) {
+            const ch = abuf.numberOfChannels > 1 ? mixToMono(abuf) : abuf.getChannelData(0);
+            const x = linearResample(ch, abuf.sampleRate, 16000);
+            const sr = 16000, win = 400, hop = 160, nFFT = 512; const hann = buildHann(win);
+            const FFT = getFFTClass(); const f = new FFT(nFFT); const complex = f.createComplexArray();
+            const nFrames = Math.max(0, Math.floor((x.length - win) / hop) + 1);
+            const feats = [];
+            for (let t = 0; t < nFrames; t++) {
+                if ((t % 50) === 0) setProgress(progressViseme, Math.min(40, Math.round((t / Math.max(1, nFrames)) * 40)));
+                const start = t * hop; const frame = new Float32Array(nFFT); let sumsq = 0;
+                for (let i = 0; i < win; i++) { const v = (x[start + i] || 0) * hann[i]; frame[i] = v; sumsq += v * v; }
+                const rms = Math.sqrt(sumsq / win); const zcr = computeZCR(frame, win);
+                f.realTransform(complex, frame);
+                const nFreqs = Math.floor(nFFT / 2) + 1; let magSum = 0, cenNum = 0, geoLogSum = 0, cnt = 0;
+                for (let k = 0; k < nFreqs; k++) { const rr = complex[2 * k], ii = complex[2 * k + 1]; const mag = Math.hypot(rr, ii) + 1e-10; magSum += mag; cenNum += (k * mag); geoLogSum += Math.log(mag); cnt++; }
+                const centroid = (magSum > 0) ? (cenNum / magSum) / nFreqs : 0; const flatness = Math.exp(geoLogSum / Math.max(1, cnt)) / (magSum / Math.max(1, cnt));
+                feats.push({ rms, zcr, centroid, flatness });
+            }
+            const labels = []; for (let i = 0; i < feats.length; i++) { const v = classifyViseme(feats[i]); const prev = labels[i - 1]?.label; if (prev && v.label !== prev && feats[i].rms < 0.04) v.label = prev; labels.push(v); }
+            const analysisFps = sr / hop; const aggRatio = analysisFps / targetFps; const out = [];
+            for (let i = 0; i < Math.floor(labels.length / aggRatio); i++) {
+                const start = Math.floor(i * aggRatio), end = Math.min(labels.length, Math.floor((i + 1) * aggRatio));
+                const slice = labels.slice(start, end); const score = new Map(); let total = 0; slice.forEach(s => { score.set(s.label, (score.get(s.label) || 0) + s.intensity); total += s.intensity; });
+                let best = 'sil', bestVal = -1; for (const [k, v] of score) { if (v > bestVal) { best = k; bestVal = v; } }
+                const intensity = total / Math.max(1, slice.length); const blends = visemeToBlendshapes(best, intensity);
+                out.push({ blendshapes: blends });
+            }
+            return { frames: out, fps: targetFps };
+        }
+
+        // ---- ONNX pipeline (reuse from index.html) ----
+        const melCfg = { sr: 16000, nFFT: 512, hop: 160, win: 400, nMels: 80, fmin: 0, fmax: 8000, amin: 1e-10, norm: 'slaney', htk: false };
+        const FEATURE_MEAN = null, FEATURE_STD = null;
+        function hzToMel(hz, htk = false) { if (htk) return 2595 * Math.log10(1 + hz / 700); const f = hz / 700; return 1127.01048 * Math.log(1 + f); }
+        function melToHz(mel, htk = false) { if (htk) return 700 * (Math.pow(10, mel / 2595) - 1); return 700 * (Math.expm1(mel / 1127.01048)); }
+        function buildMelFilterBank(sr, nFFT, nMels, fmin, fmax, { norm = 'slaney', htk = false } = {}) { const nFreqs = Math.floor(nFFT / 2) + 1; const melMin = hzToMel(fmin, htk), melMax = hzToMel(fmax, htk); const mels = new Float32Array(nMels + 2); for (let i = 0; i < mels.length; i++) mels[i] = melMin + (i * (melMax - melMin) / (nMels + 1)); const hz = new Float32Array(mels.length); for (let i = 0; i < hz.length; i++) hz[i] = melToHz(mels[i], htk); const fftFreqs = new Float32Array(nFreqs); for (let i = 0; i < nFreqs; i++) fftFreqs[i] = (sr * i) / nFFT; const fb = Array.from({ length: nMels }, () => new Float32Array(nFreqs)); for (let m = 0; m < nMels; m++) { const fml = hz[m], fm = hz[m + 1], fmh = hz[m + 2]; for (let i = 0; i < nFreqs; i++) { const f = fftFreqs[i]; let w = 0; if (f >= fml && f <= fm) w = (f - fml) / (fm - fml); else if (f > fm && f <= fmh) w = (fmh - f) / (fmh - fm); fb[m][i] = Math.max(0, w); } } if (norm === 'slaney') { for (let m = 0; m < nMels; m++) { let area = 0; for (let i = 0; i < nFreqs; i++) area += fb[m][i]; if (area > 0) { const scale = 2.0 / (fmax - fmin); for (let i = 0; i < nFreqs; i++) fb[m][i] *= scale; } } } return fb; }
+        function stftPower(signal, { nFFT, hop, win }, hann) { const FFTCtor = getFFTClass(); const nFreqs = Math.floor(nFFT / 2) + 1; const nFrames = Math.max(0, Math.floor((signal.length - win) / hop) + 1); const out = new Float32Array(nFrames * nFreqs); const f = new FFTCtor(nFFT); const complex = f.createComplexArray(); const frameSig = new Float32Array(nFFT); for (let frame = 0; frame < nFrames; frame++) { const start = frame * hop; for (let i = 0; i < nFFT; i++) frameSig[i] = 0; for (let i = 0; i < win; i++) { frameSig[i] = (signal[start + i] || 0) * hann[i]; } f.realTransform(complex, frameSig); for (let k = 0; k < nFreqs; k++) { const rr = complex[2 * k], ii = complex[2 * k + 1]; out[frame * nFreqs + k] = rr * rr + ii * ii; } } return { data: out, nFrames, nFreqs }; }
+        function applyMel(fbank, P, nFrames, nFreqs, nMels) { const out = new Float32Array(nFrames * nMels); for (let t = 0; t < nFrames; t++) { const base = t * nFreqs; for (let m = 0; m < nMels; m++) { let e = 0; const filt = fbank[m]; for (let k = 0; k < nFreqs; k++) e += filt[k] * P[base + k]; out[t * nMels + m] = e; } } return out; }
+        function powerToLogMel(mel, amin = 1e-10) { const y = new Float32Array(mel.length); for (let i = 0; i < mel.length; i++) y[i] = Math.log10(Math.max(mel[i], amin)); return y; }
+        function normalizePerBin(melFrames, nFrames, nMels, mean = null, std = null) { const out = new Float32Array(melFrames.length); if (mean && std) { for (let t = 0; t < nFrames; t++) { for (let m = 0; m < nMels; m++) { const v = melFrames[t * nMels + m]; out[t * nMels + m] = (v - mean[m]) / (std[m] || 1e-6); } } } else { const mu = new Float32Array(nMels), sig = new Float32Array(nMels); for (let m = 0; m < nMels; m++) { let s = 0; for (let t = 0; t < nFrames; t++) s += melFrames[t * nMels + m]; mu[m] = s / nFrames; } for (let m = 0; m < nMels; m++) { let s = 0; for (let t = 0; t < nFrames; t++) { const d = melFrames[t * nMels + m] - mu[m]; s += d * d; } sig[m] = Math.sqrt(s / Math.max(1, nFrames - 1)) + 1e-6; } for (let t = 0; t < nFrames; t++) { for (let m = 0; m < nMels; m++) { const v = melFrames[t * nMels + m]; out[t * nMels + m] = (v - mu[m]) / sig[m]; } } } return out; }
+        async function extractMelFeatures(abuf) { const ch0 = abuf.getChannelData(0); const srIn = abuf.sampleRate; const x = linearResample(ch0, srIn, melCfg.sr); const hann = buildHann(melCfg.win); const { data: P, nFrames, nFreqs } = stftPower(x, melCfg, hann); const fb = buildMelFilterBank(melCfg.sr, melCfg.nFFT, melCfg.nMels, melCfg.fmin, melCfg.fmax, { norm: melCfg.norm, htk: melCfg.htk }); const mel = applyMel(fb, P, nFrames, nFreqs, melCfg.nMels); const logmel = powerToLogMel(mel, melCfg.amin); const norm = normalizePerBin(logmel, nFrames, melCfg.nMels, FEATURE_MEAN, FEATURE_STD); return { data: norm, frames: nFrames, originalDuration: abuf.duration }; }
+
+        function makeOnnxFrames(outputData, numFrames, targetFps, originalDuration) {
+            const outputFeatures = 59; const originalFps = numFrames / originalDuration; let finalFrames = numFrames; let finalData = outputData; if (targetFps < originalFps) { const down = originalFps / targetFps; finalFrames = Math.floor(numFrames / down); finalData = new Float32Array(finalFrames * outputFeatures); for (let i = 0; i < finalFrames; i++) { const src = Math.floor(i * down); for (let j = 0; j < outputFeatures; j++) { finalData[i * outputFeatures + j] = outputData[src * outputFeatures + j]; } } } const frames = []; for (let i = 0; i < finalFrames; i++) {
+                const blends = {}; // first 52 are ARKit blendshapes (names as in index.html)
+                const names = ['_neutral', 'browDownLeft', 'browDownRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight', 'cheekPuff', 'cheekSquintLeft', 'cheekSquintRight', 'eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight', 'eyeSquintLeft', 'eyeSquintRight', 'eyeWideLeft', 'eyeWideRight', 'jawForward', 'jawLeft', 'jawOpen', 'jawRight', 'mouthClose', 'mouthDimpleLeft', 'mouthDimpleRight', 'mouthFrownLeft', 'mouthFrownRight', 'mouthFunnel', 'mouthLeft', 'mouthLowerDownLeft', 'mouthLowerDownRight', 'mouthPressLeft', 'mouthPressRight', 'mouthPucker', 'mouthRight', 'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper', 'mouthSmileLeft', 'mouthSmileRight', 'mouthStretchLeft', 'mouthStretchRight', 'mouthUpperUpLeft', 'mouthUpperUpRight', 'noseSneerLeft', 'noseSneerRight'];
+                for (let j = 0; j < 52; j++) { blends[names[j]] = finalData[i * outputFeatures + j]; }
+                frames.push({ blendshapes: blends });
+            }
+            return frames;
+        }
+
+        // ---- Actions ----
+        btnAnalyzeViseme.onclick = async () => {
+            if (!audioBuffer) return; btnAnalyzeViseme.disabled = true; setProgress(progressViseme, 5); setStatus(runStatus, 'info', 'Analyzing visemes...');
+            try { const fps = parseInt(selFps.value, 10) || 30; const res = await analyzeVisemes(audioBuffer, fps); setPlaybackData('viseme', res.frames, res.fps); setStatus(runStatus, 'success', `Viseme ready: ${res.frames.length} frames @ ${res.fps} fps`); } catch (e) { console.error(e); setStatus(runStatus, 'error', `Viseme analysis failed: ${e.message}`); } finally { setProgress(progressViseme, 100); btnAnalyzeViseme.disabled = false; updateEnableStates(); }
+        };
+
+        btnRunOnnx.onclick = async () => {
+            if (!audioBuffer || !onnxSession) return; btnRunOnnx.disabled = true; setProgress(progressOnnx, 5); setStatus(runStatus, 'info', 'Extracting mel + running ONNX...');
+            try { const feats = await extractMelFeatures(audioBuffer); setProgress(progressOnnx, 45); const input = new window.ort.Tensor('float32', feats.data, [1, feats.frames, melCfg.nMels]); const feeds = {}; feeds[onnxSession.inputNames[0]] = input; const out = await onnxSession.run(feeds); const outData = out[onnxSession.outputNames[0]].data; setProgress(progressOnnx, 85); const fps = parseInt(selFps.value, 10) || 30; const frames = makeOnnxFrames(outData, feats.frames, fps, feats.originalDuration); setPlaybackData('onnx', frames, fps); setStatus(runStatus, 'success', `ONNX ready: ${frames.length} frames @ ${fps} fps`); } catch (e) { console.error(e); setStatus(runStatus, 'error', `ONNX failed: ${e.message}`); } finally { setProgress(progressOnnx, 100); btnRunOnnx.disabled = false; updateEnableStates(); }
+        };
+
+        btnRunBoth.onclick = async () => {
+            btnRunBoth.disabled = true; try { await btnAnalyzeViseme.onclick(); await btnRunOnnx.onclick(); } finally { btnRunBoth.disabled = false; updateEnableStates(); }
+        };
+
+        function setPlaybackData(which, frames, fps) { const v = viewers[which]; v.frames = frames || []; v.fps = fps || 30; v.cur = 0; updateFrameLabels(); if (v.frames.length) { applyBlendshapes(which, v.frames[0].blendshapes); } }
+
+        // ---- Sync playback ----
+        function playBoth() { if (isPlaying) return; isPlaying = true; btnPlay.disabled = true; btnPause.disabled = false; btnStop.disabled = false; rangeViseme.disabled = true; rangeOnnx.disabled = true; const anyFps = viewers.onnx.frames.length ? viewers.onnx.fps : viewers.viseme.fps; targetFPS = parseInt(selFps.value, 10) || anyFps || 30; if (audioPlayerViz.src) { audioPlayerViz.currentTime = Math.min(viewers.viseme.cur, viewers.onnx.cur) / targetFPS; audioPlayerViz.play().catch(() => { }); } startTime = performance.now() - (Math.min(viewers.viseme.cur, viewers.onnx.cur) / targetFPS * 1000); animatePlayback(); }
+        function pauseBoth() { isPlaying = false; btnPlay.disabled = false; btnPause.disabled = true; rangeViseme.disabled = false; rangeOnnx.disabled = false; if (rafId) { cancelAnimationFrame(rafId); rafId = null; } if (audioPlayerViz) audioPlayerViz.pause(); }
+        function stopBoth() { pauseBoth(); viewers.viseme.cur = 0; viewers.onnx.cur = 0; applyIfExists('viseme'); applyIfExists('onnx'); updateFrameLabels(); if (audioPlayerViz) audioPlayerViz.currentTime = 0; }
+        function applyIfExists(which) { const v = viewers[which]; if (v.frames.length) { applyBlendshapes(which, v.frames[v.cur].blendshapes); } }
+        function animatePlayback() { if (!isPlaying) return; const curTime = (audioPlayerViz && audioPlayerViz.src && !audioPlayerViz.paused) ? audioPlayerViz.currentTime : (performance.now() - startTime) / 1000; const idx = Math.floor(curTime * targetFPS); let advanced = false; for (const k of ['viseme', 'onnx']) { const v = viewers[k]; if (v.frames.length) { const lim = v.frames.length; if (idx >= lim) { pauseBoth(); return; } if (idx !== v.cur) { v.cur = idx; applyBlendshapes(k, v.frames[v.cur].blendshapes); advanced = true; } } } if (advanced) updateFrameLabels(); rafId = requestAnimationFrame(animatePlayback); }
+
+        btnPlay.onclick = playBoth; btnPause.onclick = pauseBoth; btnStop.onclick = stopBoth;
+        function refreshCurrentFrames() { applyIfExists('viseme'); applyIfExists('onnx'); }
+        enhScale.oninput = () => { movementScale = parseFloat(enhScale.value) || 1.0; enhScaleVal.textContent = `${movementScale.toFixed(2)}x`; refreshCurrentFrames(); };
+        rangeViseme.oninput = (e) => { viewers.viseme.cur = Math.max(0, Math.min(parseInt(e.target.value, 10) | 0, Math.max(0, viewers.viseme.frames.length - 1))); applyIfExists('viseme'); updateFrameLabels(); if (audioPlayerViz && audioPlayerViz.src) { audioPlayerViz.currentTime = Math.min(viewers.viseme.cur, viewers.onnx.cur) / (parseInt(selFps.value, 10) || 30); } };
+        rangeOnnx.oninput = (e) => { viewers.onnx.cur = Math.max(0, Math.min(parseInt(e.target.value, 10) | 0, Math.max(0, viewers.onnx.frames.length - 1))); applyIfExists('onnx'); updateFrameLabels(); if (audioPlayerViz && audioPlayerViz.src) { audioPlayerViz.currentTime = Math.min(viewers.viseme.cur, viewers.onnx.cur) / (parseInt(selFps.value, 10) || 30); } };
+
+        window.addEventListener('resize', () => { for (const k of Object.keys(viewers)) { const v = viewers[k]; const container = (k === 'viseme') ? sceneViseme : sceneOnnx; if (!v.renderer || !v.camera) continue; const w = container.clientWidth, h = container.clientHeight; v.camera.aspect = w / h; v.camera.updateProjectionMatrix(); v.renderer.setSize(w, h); } });
+
+        // ---- ONNX model autoload ----
+        async function ensureOnnxSession() {
+            if (onnxSession) return; if (window.ort && window.ort.env && window.ort.env.wasm) { window.ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/'; }
+            try { setStatus(runStatus, 'info', 'Downloading default ONNX model...'); const resp = await fetch(DEFAULT_MODEL_URL, { cache: 'no-store' }); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); const buf = await resp.arrayBuffer(); onnxSession = await window.ort.InferenceSession.create(buf); setStatus(runStatus, 'success', 'ONNX model loaded'); } catch (e) { console.error(e); setStatus(runStatus, 'error', `Model load failed: ${e.message}`); }
+            updateEnableStates();
+        }
+
+        // ---- Boot ----
+        (async function () { await Promise.all([initViewer('viseme'), initViewer('onnx')]); renderLoop(); await ensureOnnxSession(); try { const r = await fetch(DEFAULT_AUDIO_URL, { cache: 'no-store' }); if (r.ok) { const b = await r.blob(); await loadAudioFromBlob(b, 'sample-audio.wav'); } } catch (_) { } updateEnableStates(); })();
+    </script>
+</body>
+
+</html>
