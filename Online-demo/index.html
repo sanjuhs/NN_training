@@ -6,6 +6,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>V2A Demos</title>
+
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -64,6 +65,39 @@
             box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
         }
 
+        /* Quick links bar */
+        .resource-bar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pill-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            background: white;
+            color: #333;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(102, 126, 234, 0.25);
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
+            font-size: 14px;
+        }
+
+        .pill-link .icon {
+            width: 18px;
+            height: 18px;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 13px;
+        }
+
         .note {
             text-align: center;
             color: #666;
@@ -76,6 +110,27 @@
     <div class="container">
         <h1>V2A Demos</h1>
         <div class="subtitle">Choose a page to explore the voice-to-blendshapes demos.</div>
+
+        <div class="section">
+            <div class="resource-bar">
+                <a class="pill-link" href="https://github.com/sanjuhs/NN_training" target="_blank" rel="noopener">
+                    <img class="icon" src="https://cdn.jsdelivr.net/npm/simple-icons/icons/github.svg" alt="GitHub">
+                    <span>GitHub Repo</span>
+                </a>
+                <a class="pill-link" href="#arxiv-status">
+                    <img class="icon" src="https://cdn.jsdelivr.net/npm/simple-icons/icons/arxiv.svg" alt="arXiv">
+                    <span>arXiv (Under Construction)</span>
+                </a>
+                <a class="pill-link" href="#datasets">
+                    <img class="icon" src="https://cdn.jsdelivr.net/npm/simple-icons/icons/huggingface.svg"
+                        alt="Hugging Face">
+                    <span>Datasets</span>
+                </a>
+                <a class="pill-link" href="comparison.html">
+                    <span>Try Comparison Demo</span>
+                </a>
+            </div>
+        </div>
 
         <div class="section">
             <p>
@@ -98,6 +153,188 @@
             </div>
         </div>
 
+        <div id="datasets" class="section">
+            <h3 style="margin-top:0">Datasets</h3>
+            <ul style="margin:8px 0 0 18px;">
+                <li>
+                    ML Video Dataset — pilot video set on Hugging Face.
+                    <a href="https://huggingface.co/datasets/sanjuhs/ml_video_dataset" target="_blank"
+                        rel="noopener">Link</a>
+                </li>
+                <li>
+                    Test Video Dataset — minimal test split for experiments.
+                    <a href="https://huggingface.co/datasets/sanjuhs/test-video-dataset" target="_blank"
+                        rel="noopener">Link</a>
+                </li>
+            </ul>
+            <div class="muted" style="margin-top:8px;">These are early-stage video datasets used during prototyping.
+            </div>
+        </div>
+
+        <div id="arxiv-status" class="section">
+            <h3 style="margin-top:0">arXiv Status</h3>
+            <p style="margin:8px 0 0 0;">Under construction. Drafting literature review, experiments, and results
+                summary. Target domains: cs.CV / cs.SD.</p>
+        </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">arXiv Endorsement System</h3>
+            <p style="margin:8px 0 10px 0;">arXiv requires that users be endorsed before submitting their first paper to
+                a category. Below is a summary; expand for full details.</p>
+            <ul style="margin:0 0 10px 18px;">
+                <li>Endorsement verifies contributors belong to the scientific community.</li>
+                <li>Some authors get automatic endorsement (institutional email helps).</li>
+                <li>Otherwise, request endorsement from a qualified arXiv author in your area.</li>
+            </ul>
+            <details>
+                <summary>Full explainer (click to expand)</summary>
+                <div style="margin-top:10px; font-size:14px; line-height:1.5; color:#333;">
+                    The arXiv endorsement system
+                    arXiv requires that users be endorsed before submitting their first paper to a category.
+                    <br><br>
+                    Why does arXiv require endorsement?
+                    arXiv is distinct from the web as a whole, because arXiv contains exclusively scientific content.
+                    The endorsement system verifies that arXiv contributors belong to the scientific community in a fair
+                    and sustainable way that can scale with arXiv's future growth.
+                    <br><br>
+                    arXiv is an openly accessible, moderated repository for scholarly papers in specific scientific
+                    disciplines. Material submitted to arXiv is expected to be of interest, relevance, and value to
+                    those disciplines. Endorsement is a necessary but not sufficient condition to have papers accepted
+                    in arXiv; arXiv reserves the right to reject or reclassify any submission.
+                    <br><br>
+                    The endorsement system ensures that arXiv content is relevant to current research at much lower cost
+                    than conventional peer-reviewed journals, so we can continue to offer free access to the scientific
+                    community and the general public. Although our system may be imperfect, people who fail to get
+                    endorsement are still free to post articles on their web site or to submit their publications to
+                    peer-reviewed journals.
+                    <br><br>
+                    How can I get endorsed?
+                    arXiv may give some people automatic endorsements based on subject area, topic, previous
+                    submissions, and academic affiliation. In most cases, automatic endorsement is given to authors from
+                    known academic institutions and research facilities. arXiv submitters are therefore encouraged to
+                    associate an institutional email address, if they have one, with their arXiv account (see author
+                    registration help). This will expedite the endorsement process.
+                    <br><br>
+                    During the submission process, however, we may require authors who are submitting papers to a
+                    subject category for the first time to get an endorsement from an established arXiv author. Detailed
+                    instructions on how to proceed with the endorsement request are provided at that time.
+                    <br><br>
+                    If you need to be endorsed by someone, it is best for you to find an endorser who you know
+                    personally and is knowledgeable in the subject area of your paper. A good choice for graduate
+                    students would be your thesis advisor or another professor in your department/institution working in
+                    your field.
+                    <br><br>
+                    Alternatively this is the recommended way to proceed.
+                    Start by finding related articles in your field. Your preprint surely has cited works that are
+                    already posted in the arXiv, some of these works will be particularly relevant. Bring up these
+                    abstracts from the arXiv page. You can find somebody qualified to endorse by clicking on the link
+                    titled "Which of these authors are endorsers?" at the bottom of every abstract page. Using that
+                    information, you can then find the email address of the submitter on the abstract page just under
+                    the "Submission history" heading.
+                    <br><br>
+                    It is a good idea to send eligible endorsers a copy of your proposed submission along with the
+                    endorsement request. Please note, however, that it is inappropriate to email large numbers of
+                    potential endorsers at once, or to repeatedly email the same endorser with a request for
+                    endorsement.
+                    <br><br>
+                    At least one positive endorsement is required per endorsement domain to be considered endorsed for
+                    that domain.
+                    <br><br>
+                    arXiv reserves the right to revoke any submitter's endorsement if that submitter has violated arXiv
+                    policies.
+                </div>
+            </details>
+        </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">Related Work / Potential Endorsers</h3>
+            <ul style="margin:8px 0 0 18px;">
+                <li>
+                    LivePortrait (image animation, related field).
+                    <a href="https://arxiv.org/pdf/2407.03168" target="_blank" rel="noopener">arXiv:2407.03168</a>
+                </li>
+                <li>
+                    UniTalker: Scaling up Audio-Driven 3D Facial Animation through A Unified Model.
+                    <a href="https://arxiv.org/html/2408.00762v1" target="_blank" rel="noopener">arXiv:2408.00762</a>
+                </li>
+                <li>
+                    SAiD: Speech-driven Blendshape Facial Animation with Diffusion.
+                    <a href="https://arxiv.org/abs/2401.08655" target="_blank" rel="noopener">arXiv:2401.08655</a>
+                </li>
+                <li>
+                    Content and Style Aware Audio-Driven Facial Animation.
+                    <a href="https://arxiv.org/html/2408.07005v2" target="_blank" rel="noopener">arXiv:2408.07005</a>
+                </li>
+                <li>
+                    Learning Audio-Driven Viseme Dynamics for 3D Face Animation.
+                    <a href="https://ar5iv.labs.arxiv.org/html/2301.06059" target="_blank"
+                        rel="noopener">arXiv:2301.06059</a>
+                </li>
+                <li>
+                    FaceXHuBERT: Text-less Speech-driven Expressive 3D Facial Animation.
+                    <a href="https://dlnext.acm.org/doi/abs/10.1145/3577190.3614157" target="_blank" rel="noopener">ACM
+                        DOI</a>
+                </li>
+                <li>
+                    Temporal Convolutional Networks (TCN) for sequence modeling.
+                    <a href="https://arxiv.org/abs/1803.01271" target="_blank" rel="noopener">arXiv:1803.01271</a>
+                </li>
+                <li>
+                    WaveNet: A Generative Model for Raw Audio.
+                    <a href="https://arxiv.org/abs/1609.03499" target="_blank" rel="noopener">arXiv:1609.03499</a>
+                </li>
+                <li>
+                    Talking-Face papers (daily updates).
+                    <a href="https://github.com/Ximoi/talking-face-arxiv-daily" target="_blank" rel="noopener">GitHub
+                        list</a>
+                </li>
+            </ul>
+            <div class="muted" style="margin-top:8px;">Authors of the above are potential endorsers. Consider reaching
+                out with a concise abstract and results.</div>
+        </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">Project Status</h3>
+            <ul style="margin:8px 0 0 18px;">
+                <li>Proof-of-concept 4-layer TCN trained on ~1.25 hours of data (100 Hz features, 30 FPS targets).</li>
+                <li>Demos: ONNX inference, viseme baseline, and side-by-side comparison available below.</li>
+                <li>Evaluation protocol defined (MAE, correlations, DTW, onset lag, smoothness, human MOS/preference).
+                </li>
+                <li>Next: 10-layer causal TCN (10+ s receptive field), attention blocks, ~60 hours dataset, human study.
+                </li>
+            </ul>
+            <div style="margin-top:10px; font-size:13px; color:#666;">Last updated: 2025-09-22</div>
+        </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">Research Docs</h3>
+            <div class="links">
+                <a class="btn"
+                    href="../V2A-over-training-old-nn/documentation/research-paper/research-abstract.md">Extended
+                    Abstract</a>
+                <a class="btn"
+                    href="../V2A-over-training-old-nn/documentation/research-paper/research-introduction.md">Extended
+                    Introduction</a>
+                <a class="btn"
+                    href="../V2A-over-training-old-nn/documentation/research-paper/literature-review.md">Literature
+                    Review</a>
+                <a class="btn"
+                    href="../V2A-over-training-old-nn/documentation/research-paper/researchproposal.markdown">Full
+                    Proposal</a>
+                <a class="btn" href="../V2A-over-training-old-nn/documentation/research-paper/FAQ.md">FAQ</a>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">How to Use the Demos</h3>
+            <ol style="margin:8px 0 0 18px;">
+                <li>Open a demo page (Neural Network, Viseme, or Comparison).</li>
+                <li>Load or record audio as instructed on the page.</li>
+                <li>Click the run/analyze button to generate blendshapes.</li>
+                <li>Play back and compare outputs; adjust options if available.</li>
+            </ol>
+        </div>
+
         <div class="section">
             <h3 style="margin-top:0">Diagrams</h3>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
@@ -109,6 +346,26 @@
                     style="width:100%; border-radius:12px; border:1px solid rgba(102,126,234,0.2);" />
             </div>
         </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">Roadmap</h3>
+            <ul style="margin:8px 0 0 18px;">
+                <li>Scale dataset to ~60 hours with diverse speakers and emotions.</li>
+                <li>Train 10-layer causal TCN (10+ s receptive field) and evaluate latency.</li>
+                <li>Integrate attention blocks for emotional and long-range context.</li>
+                <li>Run human studies (MOS, pairwise preferences) and publish metrics.</li>
+                <li>Optimize deployment (quantization, ONNX) for real-time/mobile.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h3 style="margin-top:0">Contact</h3>
+            <p style="margin:8px 0 0 0;">
+                Maintainer: Sanjay Prasad HS (Independent Researcher). Email: <a
+                    href="mailto:sanjuhs123@gmail.com">sanjuhs123@gmail.com</a>
+            </p>
+        </div>
+
 
         <div class="note">Tip: Load audio on the page, then run the analysis.</div>
     </div>

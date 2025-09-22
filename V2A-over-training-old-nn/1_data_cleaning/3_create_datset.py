@@ -513,8 +513,13 @@ def main():
     
     # Initialize dataset creator
     # 240ms sequences with 120ms overlap = 120ms step size
-    creator = DatasetCreator(sequence_length_ms=240, overlap_ms=120)
-    
+    # creator = DatasetCreator(sequence_length_ms=240, overlap_ms=120)
+
+    # for longer sequences uncomment and use this for the lagrer 10s model
+    # 10000ms sequences with 8000ms overlap = 2000ms step size
+    creator = DatasetCreator(sequence_length_ms=10000, overlap_ms=8000)
+
+
     # Load features
     print("\\nLoading extracted features...")
     audio_data, visual_data = creator.load_features(f"{root_path}/data/extracted_features",)
