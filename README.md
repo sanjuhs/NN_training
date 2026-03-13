@@ -14,6 +14,19 @@ Here is the link to the online demo:
 
 https://nn-training.vercel.app/
 
+For local testing, do not open the HTML files directly with `file://`.
+Run a local server from the repo root:
+
+```bash
+python -m http.server 8000
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000/Online-demo/transformer-model.html
+```
+
 # Project Overview
 
 The objective of this Neural Network Training directory is for me to do all my Neural Network training on this and to follow a bunch of different projects that I'd like to. The first and primary project that I'll be following through on will be the project where I will be converting voice into blend shapes. Basically I will take input voice of a person and from that I will infer a bunch of 52 numbers that will control the blend shape of a character. So, given some speech, the character will speak with that speech and will get animated with those specific blend shapes and that's the minor objective of this Neural Network Training that I'll do. My constraints are:

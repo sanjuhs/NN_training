@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Comparison - ONNX vs Viseme Heuristic</title>
+    <title>Comparison - Transformer ONNX vs Viseme Heuristic</title>
 
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
     <script type="importmap">
@@ -208,8 +208,8 @@
 
 <body>
     <div class="container">
-        <h1>🎙️ ONNX vs Heuristic Viseme — Side-by-side</h1>
-        <div class="subtitle">Record/upload/load audio → compare NN predictions vs heuristic visemes on raccoon heads
+        <h1>🎙️ Transformer ONNX vs Heuristic Viseme — Side-by-side</h1>
+        <div class="subtitle">Record/upload/load audio → compare transformer predictions vs heuristic visemes on raccoon heads
         </div>
 
         <div class="section">
@@ -241,7 +241,7 @@
                         <option value="60">60</option>
                     </select></label>
                 <button id="btnAnalyzeViseme" disabled>Analyze Viseme (Heuristic)</button>
-                <button id="btnRunOnnx" disabled>Run ONNX (NN)</button>
+                <button id="btnRunOnnx" disabled>Run ONNX (Transformer)</button>
                 <button id="btnRunBoth" disabled>Run Both</button>
             </div>
             <div class="progress">
@@ -277,7 +277,7 @@
             </div>
 
             <div class="section">
-                <div class="viewer-title">ONNX (Neural Network) → Blendshapes</div>
+                <div class="viewer-title">ONNX (Tiny Transformer) → Blendshapes</div>
                 <div id="sceneOnnx" class="scene">
                     <div class="scene-loading" id="loadingOnnx">Loading 3D...</div>
                 </div>
@@ -355,7 +355,7 @@
         const enhScale = document.getElementById('enhScale');
         const enhScaleVal = document.getElementById('enhScaleVal');
 
-        const DEFAULT_MODEL_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/best_tcn_model_train_50.onnx';
+        const DEFAULT_MODEL_URLS = ['../assets/tiny_transformer_full10s_l1.onnx', 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/tiny_transformer_full10s_l1.onnx'];
         const DEFAULT_AUDIO_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav';
 
         // ---- Utils ----
@@ -515,6 +515,7 @@
         // ---- ONNX pipeline (reuse from index.html) ----
         const melCfg = { sr: 16000, nFFT: 512, hop: 160, win: 400, nMels: 80, fmin: 0, fmax: 8000, amin: 1e-10, norm: 'slaney', htk: false };
         const FEATURE_MEAN = null, FEATURE_STD = null;
+        const ONNX_CHUNK_FRAMES = 1000, ONNX_CHUNK_OVERLAP_FRAMES = 500;
         function hzToMel(hz, htk = false) { if (htk) return 2595 * Math.log10(1 + hz / 700); const f = hz / 700; return 1127.01048 * Math.log(1 + f); }
         function melToHz(mel, htk = false) { if (htk) return 700 * (Math.pow(10, mel / 2595) - 1); return 700 * (Math.expm1(mel / 1127.01048)); }
         function buildMelFilterBank(sr, nFFT, nMels, fmin, fmax, { norm = 'slaney', htk = false } = {}) { const nFreqs = Math.floor(nFFT / 2) + 1; const melMin = hzToMel(fmin, htk), melMax = hzToMel(fmax, htk); const mels = new Float32Array(nMels + 2); for (let i = 0; i < mels.length; i++) mels[i] = melMin + (i * (melMax - melMin) / (nMels + 1)); const hz = new Float32Array(mels.length); for (let i = 0; i < hz.length; i++) hz[i] = melToHz(mels[i], htk); const fftFreqs = new Float32Array(nFreqs); for (let i = 0; i < nFreqs; i++) fftFreqs[i] = (sr * i) / nFFT; const fb = Array.from({ length: nMels }, () => new Float32Array(nFreqs)); for (let m = 0; m < nMels; m++) { const fml = hz[m], fm = hz[m + 1], fmh = hz[m + 2]; for (let i = 0; i < nFreqs; i++) { const f = fftFreqs[i]; let w = 0; if (f >= fml && f <= fm) w = (f - fml) / (fm - fml); else if (f > fm && f <= fmh) w = (fmh - f) / (fmh - fm); fb[m][i] = Math.max(0, w); } } if (norm === 'slaney') { for (let m = 0; m < nMels; m++) { let area = 0; for (let i = 0; i < nFreqs; i++) area += fb[m][i]; if (area > 0) { const scale = 2.0 / (fmax - fmin); for (let i = 0; i < nFreqs; i++) fb[m][i] *= scale; } } } return fb; }
@@ -523,6 +524,9 @@
         function powerToLogMel(mel, amin = 1e-10) { const y = new Float32Array(mel.length); for (let i = 0; i < mel.length; i++) y[i] = Math.log10(Math.max(mel[i], amin)); return y; }
         function normalizePerBin(melFrames, nFrames, nMels, mean = null, std = null) { const out = new Float32Array(melFrames.length); if (mean && std) { for (let t = 0; t < nFrames; t++) { for (let m = 0; m < nMels; m++) { const v = melFrames[t * nMels + m]; out[t * nMels + m] = (v - mean[m]) / (std[m] || 1e-6); } } } else { const mu = new Float32Array(nMels), sig = new Float32Array(nMels); for (let m = 0; m < nMels; m++) { let s = 0; for (let t = 0; t < nFrames; t++) s += melFrames[t * nMels + m]; mu[m] = s / nFrames; } for (let m = 0; m < nMels; m++) { let s = 0; for (let t = 0; t < nFrames; t++) { const d = melFrames[t * nMels + m] - mu[m]; s += d * d; } sig[m] = Math.sqrt(s / Math.max(1, nFrames - 1)) + 1e-6; } for (let t = 0; t < nFrames; t++) { for (let m = 0; m < nMels; m++) { const v = melFrames[t * nMels + m]; out[t * nMels + m] = (v - mu[m]) / sig[m]; } } } return out; }
         async function extractMelFeatures(abuf) { const ch0 = abuf.getChannelData(0); const srIn = abuf.sampleRate; const x = linearResample(ch0, srIn, melCfg.sr); const hann = buildHann(melCfg.win); const { data: P, nFrames, nFreqs } = stftPower(x, melCfg, hann); const fb = buildMelFilterBank(melCfg.sr, melCfg.nFFT, melCfg.nMels, melCfg.fmin, melCfg.fmax, { norm: melCfg.norm, htk: melCfg.htk }); const mel = applyMel(fb, P, nFrames, nFreqs, melCfg.nMels); const logmel = powerToLogMel(mel, melCfg.amin); const norm = normalizePerBin(logmel, nFrames, melCfg.nMels, FEATURE_MEAN, FEATURE_STD); return { data: norm, frames: nFrames, originalDuration: abuf.duration }; }
+        function buildChunkStarts(totalFrames, chunkFrames, overlapFrames) { if (totalFrames <= chunkFrames) return [0]; const starts = []; const stepFrames = chunkFrames - overlapFrames; for (let start = 0; start <= totalFrames - chunkFrames; start += stepFrames) starts.push(start); const tailStart = totalFrames - chunkFrames; if (starts[starts.length - 1] !== tailStart) starts.push(tailStart); return Array.from(new Set(starts)); }
+        function buildChunkWeights(chunkFrames, overlapFrames) { const weights = new Float32Array(chunkFrames); weights.fill(1); if (overlapFrames <= 0) return weights; for (let i = 0; i < overlapFrames; i++) { const weight = (i + 1) / (overlapFrames + 1); weights[i] = weight; weights[chunkFrames - 1 - i] = weight; } return weights; }
+        async function runOnnxInferenceChunked(flatFeatures, totalFrames, featureDim, onProgress = null) { const chunkFrames = Math.min(ONNX_CHUNK_FRAMES, totalFrames); const overlapFrames = totalFrames > chunkFrames ? Math.min(ONNX_CHUNK_OVERLAP_FRAMES, chunkFrames - 1) : 0; const starts = buildChunkStarts(totalFrames, chunkFrames, overlapFrames); const chunkWeights = buildChunkWeights(chunkFrames, overlapFrames); const weightSums = new Float32Array(totalFrames); let merged = null; let outputDim = 0; for (let chunkIndex = 0; chunkIndex < starts.length; chunkIndex++) { const start = starts[chunkIndex]; const end = Math.min(start + chunkFrames, totalFrames); const currentChunkFrames = end - start; const chunkData = flatFeatures.slice(start * featureDim, end * featureDim); const input = new window.ort.Tensor('float32', chunkData, [1, currentChunkFrames, featureDim]); const feeds = {}; feeds[onnxSession.inputNames[0]] = input; const out = await onnxSession.run(feeds); const outData = out[onnxSession.outputNames[0]].data; if (!merged) { outputDim = outData.length / currentChunkFrames; merged = new Float32Array(totalFrames * outputDim); } for (let frame = 0; frame < currentChunkFrames; frame++) { const frameWeight = chunkWeights[frame]; const dstFrame = start + frame; weightSums[dstFrame] += frameWeight; for (let feature = 0; feature < outputDim; feature++) { merged[dstFrame * outputDim + feature] += outData[frame * outputDim + feature] * frameWeight; } } if (onProgress) onProgress((chunkIndex + 1) / starts.length); } for (let frame = 0; frame < totalFrames; frame++) { const invWeight = 1.0 / Math.max(weightSums[frame], 1e-6); for (let feature = 0; feature < outputDim; feature++) merged[frame * outputDim + feature] *= invWeight; } return { data: merged, frames: totalFrames, outputDim }; }
 
         function makeOnnxFrames(outputData, numFrames, targetFps, originalDuration) {
             const outputFeatures = 59; const originalFps = numFrames / originalDuration; let finalFrames = numFrames; let finalData = outputData; if (targetFps < originalFps) { const down = originalFps / targetFps; finalFrames = Math.floor(numFrames / down); finalData = new Float32Array(finalFrames * outputFeatures); for (let i = 0; i < finalFrames; i++) { const src = Math.floor(i * down); for (let j = 0; j < outputFeatures; j++) { finalData[i * outputFeatures + j] = outputData[src * outputFeatures + j]; } } } const frames = []; for (let i = 0; i < finalFrames; i++) {
@@ -542,7 +546,7 @@
 
         btnRunOnnx.onclick = async () => {
             if (!audioBuffer || !onnxSession) return; btnRunOnnx.disabled = true; setProgress(progressOnnx, 5); setStatus(runStatus, 'info', 'Extracting mel + running ONNX...');
-            try { const feats = await extractMelFeatures(audioBuffer); setProgress(progressOnnx, 45); const input = new window.ort.Tensor('float32', feats.data, [1, feats.frames, melCfg.nMels]); const feeds = {}; feeds[onnxSession.inputNames[0]] = input; const out = await onnxSession.run(feeds); const outData = out[onnxSession.outputNames[0]].data; setProgress(progressOnnx, 85); const fps = parseInt(selFps.value, 10) || 30; const frames = makeOnnxFrames(outData, feats.frames, fps, feats.originalDuration); setPlaybackData('onnx', frames, fps); setStatus(runStatus, 'success', `ONNX ready: ${frames.length} frames @ ${fps} fps`); } catch (e) { console.error(e); setStatus(runStatus, 'error', `ONNX failed: ${e.message}`); } finally { setProgress(progressOnnx, 100); btnRunOnnx.disabled = false; updateEnableStates(); }
+            try { const feats = await extractMelFeatures(audioBuffer); setProgress(progressOnnx, 45); const out = await runOnnxInferenceChunked(feats.data, feats.frames, melCfg.nMels, (progress) => setProgress(progressOnnx, 45 + progress * 40)); setProgress(progressOnnx, 85); const fps = parseInt(selFps.value, 10) || 30; const frames = makeOnnxFrames(out.data, feats.frames, fps, feats.originalDuration); setPlaybackData('onnx', frames, fps); setStatus(runStatus, 'success', `ONNX ready: ${frames.length} frames @ ${fps} fps`); } catch (e) { console.error(e); setStatus(runStatus, 'error', `ONNX failed: ${e.message}`); } finally { setProgress(progressOnnx, 100); btnRunOnnx.disabled = false; updateEnableStates(); }
         };
 
         btnRunBoth.onclick = async () => {
@@ -569,7 +573,7 @@
         // ---- ONNX model autoload ----
         async function ensureOnnxSession() {
             if (onnxSession) return; if (window.ort && window.ort.env && window.ort.env.wasm) { window.ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/'; }
-            try { setStatus(runStatus, 'info', 'Downloading default ONNX model...'); const resp = await fetch(DEFAULT_MODEL_URL, { cache: 'no-store' }); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); const buf = await resp.arrayBuffer(); onnxSession = await window.ort.InferenceSession.create(buf); setStatus(runStatus, 'success', 'ONNX model loaded'); } catch (e) { console.error(e); setStatus(runStatus, 'error', `Model load failed: ${e.message}`); }
+            try { setStatus(runStatus, 'info', 'Downloading default ONNX model...'); let buf = null; let lastError = null; for (const url of DEFAULT_MODEL_URLS) { try { const resp = await fetch(url, { cache: 'no-store' }); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); buf = await resp.arrayBuffer(); break; } catch (error) { lastError = error; } } if (!buf) throw lastError || new Error('Could not load default ONNX model'); onnxSession = await window.ort.InferenceSession.create(buf); setStatus(runStatus, 'success', 'ONNX model loaded'); } catch (e) { console.error(e); setStatus(runStatus, 'error', `Model load failed: ${e.message}`); }
             updateEnableStates();
         }
 

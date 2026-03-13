@@ -136,18 +136,20 @@
             <p>
                 This project builds a real-time neural network that converts input audio into
                 facial blendshapes and gentle head motion for expressive animation. We extract
-                mel-spectrogram features from audio, run them through a causal Temporal
-                Convolutional Network (TCN), and output 52 ARKit-compatible blendshapes plus
-                head pose. You can try the full NN demo, the heuristic viseme baseline, or a
+                mel-spectrogram features from audio, run them through either the older TCN path
+                or the newer tiny transformer path, and output 52 ARKit-compatible blendshapes plus
+                head pose. You can try the transformer demo, the legacy NN demo, the heuristic viseme baseline, or a
                 side-by-side comparison above. For more details, see the
-                <a href="../V2A-over-training-old-nn/documentation/research-paper/FAQ.md">FAQ</a>
-                and <a href="../V2A-over-training-old-nn/documentation/Architecture.md">Architecture</a>.
+                <a href="../V2A-over-training-old-nn/documentation/TinyTransformer_Conference_FAQ.md">Transformer FAQ</a>,
+                <a href="../V2A-over-training-old-nn/documentation/TinyTransformer_Overfit_Architecture.md">Transformer Architecture</a>,
+                and the older <a href="../V2A-over-training-old-nn/documentation/research-paper/FAQ.md">project FAQ</a>.
             </p>
         </div>
 
         <div class="section">
             <div class="links">
                 <a class="btn" href="comparison.html">Compare: ONNX vs Heuristic</a>
+                <a class="btn" href="transformer-model.html">Tiny Transformer (ONNX)</a>
                 <a class="btn" href="nn-model.html">Neural Network (ONNX)</a>
                 <a class="btn" href="visemes2.html">Viseme Heuristic</a>
             </div>

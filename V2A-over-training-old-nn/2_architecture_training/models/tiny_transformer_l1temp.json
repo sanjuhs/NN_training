@@ -1,0 +1,48 @@
+{
+  "model_type": "TinyTransformer_Audio_to_Blendshapes",
+  "pytorch_source": "models/tiny_transformer_l1temp_best.pth",
+  "onnx_path": "models/tiny_transformer_l1temp.onnx",
+  "input_shape": [
+    "batch_size",
+    "sequence_length",
+    80
+  ],
+  "output_shape": [
+    "batch_size",
+    "sequence_length",
+    59
+  ],
+  "input_name": "audio_features",
+  "output_name": "blendshapes",
+  "description": {
+    "input": "80 mel-spectrogram features",
+    "output": "59 values per frame"
+  },
+  "model_config": {
+    "input_dim": 80,
+    "output_dim": 59,
+    "d_model": 128,
+    "nhead": 4,
+    "num_layers": 3,
+    "dim_feedforward": 256,
+    "dropout": 0.0,
+    "max_seq_len": 1200,
+    "pose_dims": 7,
+    "pose_scale": 0.2
+  },
+  "model_info": {
+    "input_dim": 80,
+    "output_dim": 59,
+    "d_model": 128,
+    "nhead": 4,
+    "num_layers": 3,
+    "dim_feedforward": 256,
+    "dropout": 0.0,
+    "max_seq_len": 1200,
+    "pose_dims": 7,
+    "pose_scale": 0.2,
+    "architecture": "tiny_transformer_encoder",
+    "num_parameters": 432443,
+    "model_size_mb": 1.6496391296386719
+  }
+}

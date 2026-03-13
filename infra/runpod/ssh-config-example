@@ -1,0 +1,8 @@
+Host nn-training-runpod
+    HostName <RUNPOD_PUBLIC_IP>
+    User root
+    Port <RUNPOD_TCP_PORT_22>
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 30
+    ServerAliveCountMax 120
+    StrictHostKeyChecking accept-new
