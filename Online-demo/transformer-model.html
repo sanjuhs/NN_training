@@ -568,6 +568,7 @@
 <body>
     <div class="container">
         <h1>🎙️ Tiny Transformer Audio to Blendshapes</h1>
+        <div id="environmentNotice" class="status error" style="display: none;"></div>
 
         <!-- Model Loading Section -->
         <div class="section">
@@ -582,7 +583,7 @@
                 Model not loaded
             </div>
             <div class="controls">
-                <button id="loadDefaultModelBtn" onclick="loadDefaultModel()">⬇️ Use default GitHub model</button>
+                <button id="loadDefaultModelBtn" onclick="loadDefaultModel()">⬇️ Use default demo model</button>
             </div>
         </div>
 
@@ -638,7 +639,7 @@
             <div class="upload-section">
                 <h4>🧪 Load Sample Audio</h4>
                 <div class="controls">
-                    <button id="loadSampleAudioBtn" onclick="loadSampleAudio()">⬇️ Use default GitHub audio</button>
+                    <button id="loadSampleAudioBtn" onclick="loadSampleAudio()">⬇️ Use default demo audio</button>
                 </div>
             </div>
 
@@ -901,6 +902,76 @@
             winLength: 400,
             nFFT: 512
         };
+        const LOCAL_SERVER_COMMAND = 'cd /Users/sanjayprasads/Desktop/Coding/Python/NN_training/Online-demo && ./run_demo.sh';
+
+        function isFileProtocol() {
+            return window.location.protocol === 'file:';
+        }
+
+        function getErrorMessage(error) {
+            if (!error) return 'Unknown error';
+            if (typeof error === 'string') return error;
+            if (typeof error === 'number') return `WebAssembly runtime error code ${error}`;
+            if (error.message) return error.message;
+            if (error.type) return `${error.type} event`;
+            try {
+                return JSON.stringify(error);
+            } catch (_) {
+                return String(error);
+            }
+        }
+
+        function showEnvironmentNotice() {
+            const notice = document.getElementById('environmentNotice');
+            if (!notice) return;
+
+            if (isFileProtocol()) {
+                notice.textContent =
+                    `This page is running from file://, so browser security will block some default downloads and 3D assets. Start the local demo server with: ${LOCAL_SERVER_COMMAND}`;
+                notice.style.display = 'block';
+            } else {
+                notice.style.display = 'none';
+            }
+        }
+
+        function updateSceneLoadingMessage(message) {
+            const loading = document.getElementById('sceneLoading');
+            if (!loading) return;
+            loading.innerHTML = `<p style="max-width: 280px; margin: 0 auto; line-height: 1.5;">${message}</p>`;
+        }
+
+        async function createOnnxSession(arrayBuffer) {
+            if (!window.ort) {
+                throw new Error('ONNX Runtime failed to load. Check network and CDN.');
+            }
+            return window.ort.InferenceSession.create(arrayBuffer, {
+                executionProviders: ['wasm']
+            });
+        }
+
+        async function fetchFirstAvailable(urls, responseType) {
+            const urlList = Array.isArray(urls) ? urls : [urls];
+            let lastError = null;
+
+            for (const url of urlList) {
+                try {
+                    const resp = await fetch(url, { cache: 'no-store' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+                    if (responseType === 'arrayBuffer') {
+                        return { value: await resp.arrayBuffer(), url };
+                    }
+                    if (responseType === 'blob') {
+                        return { value: await resp.blob(), url };
+                    }
+                    throw new Error(`Unsupported response type: ${responseType}`);
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+
+            throw lastError || new Error('Could not fetch any default asset');
+        }
 
         // Initialize the 3D scene
         async function initializeScene() {
@@ -914,8 +985,8 @@
                     ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
                 } catch (err) {
                     console.error('❌ Failed to load Three.js modules:', err);
-                    showStatus('inferenceStatus', 'error', 'Failed to load 3D modules. Check your internet connection.');
-                    return;
+                    updateSceneLoadingMessage('3D preview unavailable. The inference results were still generated.');
+                    throw new Error(`Failed to load 3D modules: ${getErrorMessage(err)}`);
                 }
             }
 
@@ -1031,8 +1102,8 @@
                     },
                     (error) => {
                         console.error('❌ Model load error:', error);
-                        showStatus('inferenceStatus', 'error', 'Failed to load raccoon model');
-                        reject(error);
+                        updateSceneLoadingMessage('3D preview unavailable. Results and downloads are still ready.');
+                        reject(new Error(`Failed to load raccoon model: ${getErrorMessage(error)}`));
                     }
                 );
             });
@@ -1181,16 +1252,13 @@
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                if (!window.ort) {
-                    throw new Error('ONNX Runtime failed to load. Check network and CDN.');
-                }
-                onnxSession = await window.ort.InferenceSession.create(arrayBuffer);
+                onnxSession = await createOnnxSession(arrayBuffer);
 
                 showStatus('modelStatus', 'success', `Model loaded successfully! Input: ${JSON.stringify(onnxSession.inputNames)}, Output: ${JSON.stringify(onnxSession.outputNames)}`);
                 updateInferenceButton();
             } catch (error) {
                 console.error('Error loading model:', error);
-                showStatus('modelStatus', 'error', `Error loading model: ${error.message}`);
+                showStatus('modelStatus', 'error', `Error loading model: ${getErrorMessage(error)}`);
                 onnxSession = null;
             }
         }
@@ -1534,7 +1602,7 @@
                 updateInferenceButton();
             } catch (error) {
                 console.error('Error loading audio:', error);
-                showStatus('inferenceStatus', 'error', `Error loading audio: ${error.message}`);
+                showStatus('inferenceStatus', 'error', `Error loading audio: ${getErrorMessage(error)}`);
                 audioBuffer = null;
             }
         }
@@ -1596,7 +1664,7 @@
 
             } catch (error) {
                 console.error('Inference error:', error);
-                showStatus('inferenceStatus', 'error', `Inference failed: ${error.message}`);
+                showStatus('inferenceStatus', 'error', `Inference failed: ${getErrorMessage(error)}`);
             } finally {
                 runButton.disabled = false;
                 runButton.innerHTML = 'Run Inference';
@@ -1854,7 +1922,7 @@
         }
 
         async function runOnnxInferenceChunked(flatFeatures, totalFrames, featureDim, onProgress = null) {
-            const chunkFrames = Math.min(ONNX_CHUNK_FRAMES, totalFrames);
+            const chunkFrames = ONNX_CHUNK_FRAMES;
             const overlapFrames = totalFrames > chunkFrames
                 ? Math.min(ONNX_CHUNK_OVERLAP_FRAMES, chunkFrames - 1)
                 : 0;
@@ -1869,11 +1937,12 @@
                 const start = starts[chunkIndex];
                 const end = Math.min(start + chunkFrames, totalFrames);
                 const currentChunkFrames = end - start;
-                const chunkData = flatFeatures.slice(start * featureDim, end * featureDim);
+                const chunkData = new Float32Array(chunkFrames * featureDim);
+                chunkData.set(flatFeatures.slice(start * featureDim, end * featureDim));
                 const inputTensor = new window.ort.Tensor(
                     'float32',
                     chunkData,
-                    [1, currentChunkFrames, featureDim]
+                    [1, chunkFrames, featureDim]
                 );
                 const feeds = {};
                 feeds[onnxSession.inputNames[0]] = inputTensor;
@@ -1882,7 +1951,7 @@
                 const outputData = results[onnxSession.outputNames[0]].data;
 
                 if (!merged) {
-                    outputDim = outputData.length / currentChunkFrames;
+                    outputDim = outputData.length / chunkFrames;
                     merged = new Float32Array(totalFrames * outputDim);
                 }
 
@@ -2124,17 +2193,30 @@
             // Initialize and show 3D visualization
             visualizationSection.style.display = 'block';
 
+            if (results.frames.length > 0) {
+                currentBlendshapes = processBlendshapes(results.frames[0].blendshapes);
+                updateBlendshapesDisplay();
+            }
+
             // Only initialize scene if not already initialized
             if (!modelLoaded || !scene) {
                 console.log('🦝 Initializing 3D scene for the first time...');
-                initializeScene().then(() => {
-                    setupPlaybackControls(results);
+                initializeScene()
+                    .then(() => {
+                        setupPlaybackControls(results);
 
-                    // Show the first frame
-                    if (results.frames.length > 0) {
-                        updateRaccoonFromFrame(results.frames[0]);
-                    }
-                });
+                        if (results.frames.length > 0) {
+                            updateRaccoonFromFrame(results.frames[0]);
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('Visualization initialization failed:', error);
+                        showStatus(
+                            'inferenceStatus',
+                            'success',
+                            `Inference completed. Generated ${results.frameCount} frames. 3D preview unavailable: ${getErrorMessage(error)}`
+                        );
+                    });
             } else {
                 console.log('🦝 Using existing 3D scene...');
                 // Scene already exists, just setup playback with new data
@@ -2483,44 +2565,34 @@
         // --- Defaults (local asset first, GitHub raw fallback) ---
         const DEFAULT_MODEL_URLS = [
             '../assets/tiny_transformer_full10s_l1.onnx',
+            'https://cdn.jsdelivr.net/gh/sanjuhs/NN_training@main/assets/tiny_transformer_full10s_l1.onnx',
             'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/tiny_transformer_full10s_l1.onnx'
         ];
-        const DEFAULT_AUDIO_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav';
+        const DEFAULT_AUDIO_URLS = [
+            '../assets/sample-audio.wav',
+            'https://cdn.jsdelivr.net/gh/sanjuhs/NN_training@main/assets/sample-audio.wav',
+            'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav'
+        ];
 
         async function loadDefaultModelFromUrl(urls = DEFAULT_MODEL_URLS) {
             try {
                 showStatus('modelStatus', 'info', 'Downloading default model...');
-                let arrayBuffer = null;
-                let lastError = null;
-                for (const url of (Array.isArray(urls) ? urls : [urls])) {
-                    try {
-                        const resp = await fetch(url, { cache: 'no-store' });
-                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                        arrayBuffer = await resp.arrayBuffer();
-                        break;
-                    } catch (error) {
-                        lastError = error;
-                    }
-                }
-                if (!arrayBuffer) throw lastError || new Error('Could not load default ONNX model');
-                if (!window.ort) throw new Error('ONNX runtime not available');
-                onnxSession = await window.ort.InferenceSession.create(arrayBuffer);
+                const { value: arrayBuffer } = await fetchFirstAvailable(urls, 'arrayBuffer');
+                onnxSession = await createOnnxSession(arrayBuffer);
                 document.getElementById('modelFileName').textContent = 'tiny_transformer_full10s_l1.onnx (default)';
                 showStatus('modelStatus', 'success', `Model loaded! Input: ${JSON.stringify(onnxSession.inputNames)}, Output: ${JSON.stringify(onnxSession.outputNames)}`);
                 updateInferenceButton();
             } catch (e) {
                 console.error('Default model load failed:', e);
-                showStatus('modelStatus', 'error', `Failed to load default model: ${e.message}`);
+                showStatus('modelStatus', 'error', `Failed to load default model: ${getErrorMessage(e)}`);
             }
         }
 
-        async function loadSampleAudioFromUrl(url = DEFAULT_AUDIO_URL) {
+        async function loadSampleAudioFromUrl(urls = DEFAULT_AUDIO_URLS) {
             try {
                 const btn = document.getElementById('loadSampleAudioBtn');
                 if (btn) { btn.disabled = true; btn.textContent = 'Downloading...'; }
-                const resp = await fetch(url, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const blob = await resp.blob();
+                const { value: blob, url } = await fetchFirstAvailable(urls, 'blob');
                 const audioUrl = URL.createObjectURL(blob);
 
                 // Preview
@@ -2531,7 +2603,9 @@
                 const audioPlayer = document.getElementById('audioPlayer');
                 audioPlayer.src = audioUrl;
                 document.getElementById('audioPreview').style.display = 'block';
-                document.getElementById('audioFileName').textContent = 'sample-audio.wav (GitHub)';
+                document.getElementById('audioFileName').textContent = url.startsWith('..')
+                    ? 'sample-audio.wav (local asset)'
+                    : 'sample-audio.wav (downloaded default)';
 
                 // Decode for inference
                 const arrayBuffer = await blob.arrayBuffer();
@@ -2550,22 +2624,33 @@
                 // Info and state
                 const duration = audioBuffer.duration.toFixed(2);
                 const sampleRate = audioBuffer.sampleRate;
-                document.getElementById('audioInfo').innerHTML = `Duration: ${duration}s | Sample Rate: ${sampleRate}Hz | Source: GitHub`;
+                document.getElementById('audioInfo').innerHTML = `Duration: ${duration}s | Sample Rate: ${sampleRate}Hz | Source: ${url.startsWith('..') ? 'Local asset' : 'Remote default'}`;
                 updateRecordingStatus('idle', 'Ready to record');
                 document.getElementById('clearRecordBtn').disabled = true;
                 document.getElementById('recordingTimer').textContent = '00:00';
                 updateInferenceButton();
             } catch (e) {
                 console.error('Default audio load failed:', e);
-                showStatus('inferenceStatus', 'error', `Failed to load sample audio: ${e.message}`);
+                showStatus('inferenceStatus', 'error', `Failed to load sample audio: ${getErrorMessage(e)}`);
             } finally {
                 const btn = document.getElementById('loadSampleAudioBtn');
-                if (btn) { btn.disabled = false; btn.textContent = '⬇️ Use default GitHub audio'; }
+                if (btn) { btn.disabled = false; btn.textContent = '⬇️ Use default demo audio'; }
             }
         }
 
         // Auto-load defaults on page load for instant demo
         window.addEventListener('load', async () => {
+            showEnvironmentNotice();
+
+            if (isFileProtocol()) {
+                showStatus(
+                    'modelStatus',
+                    'info',
+                    'Opened from file://. Default URL downloads may fail in the browser. Use ./run_demo.sh for the one-click demo, or upload the ONNX and audio files manually.'
+                );
+                return;
+            }
+
             // Only auto-load if nothing is loaded yet
             if (!onnxSession) {
                 await loadDefaultModelFromUrl();
