@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Comparison - Transformer ONNX vs Viseme Heuristic</title>
+    <title>Comparison - Viseme vs TCN vs Transformer</title>
 
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js"></script>
     <script type="importmap">
@@ -19,7 +19,7 @@
 
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
             margin: 0;
             padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -28,9 +28,9 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1480px;
             margin: 0 auto;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.96);
             border-radius: 20px;
             padding: 28px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
@@ -145,16 +145,65 @@
             border-radius: 10px;
         }
 
-        .grid-2 {
+        .grid-3 {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 14px;
         }
 
-        @media (max-width: 1024px) {
-            .grid-2 {
+        @media (max-width: 1200px) {
+            .grid-3 {
                 grid-template-columns: 1fr;
             }
+        }
+
+        .model-card {
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(102, 126, 234, 0.15);
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .model-card h4 {
+            margin: 0 0 10px 0;
+            color: #667eea;
+        }
+
+        .meta-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .meta-label {
+            color: #666;
+        }
+
+        .meta-value {
+            color: #222;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .output-summary {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(102, 126, 234, 0.12);
+            color: #667eea;
+            font-size: 13px;
+        }
+
+        .viewer-title {
+            color: #667eea;
+            margin: 0 0 10px 0;
+            font-weight: 700;
+            text-align: center;
         }
 
         .scene {
@@ -173,13 +222,27 @@
             transform: translate(-50%, -50%);
             color: #667eea;
             text-align: center;
+            width: 80%;
         }
 
-        .viewer-title {
-            text-align: center;
+        .progress-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .progress-card {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(102, 126, 234, 0.12);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .progress-card span {
+            display: block;
             color: #667eea;
-            margin: 6px 0 10px;
             font-weight: 600;
+            margin-bottom: 6px;
         }
 
         .progress {
@@ -187,10 +250,9 @@
             background: #eee;
             border-radius: 999px;
             overflow: hidden;
-            margin: 10px 0;
         }
 
-        .progress>div {
+        .progress > div {
             height: 100%;
             width: 0%;
             background: linear-gradient(45deg, #667eea, #764ba2);
@@ -202,15 +264,16 @@
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 10px;
+            align-items: center;
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🎙️ Transformer ONNX vs Heuristic Viseme — Side-by-side</h1>
-        <div class="subtitle">Record/upload/load audio → compare transformer predictions vs heuristic visemes on raccoon heads
-        </div>
+        <h1>Voice To Blendshapes Comparison</h1>
+        <div class="subtitle">Heuristic visemes vs old TCN neural network vs tiny transformer neural network on the same audio.</div>
+        <div id="environmentNotice" class="status error" style="display:none;"></div>
 
         <div class="section">
             <h3>1) Audio</h3>
@@ -220,9 +283,9 @@
                     <button id="btnRecStop" disabled>Stop</button>
                     <button id="btnRecClear" disabled>Clear</button>
                 </div>
-                <label class="file-chip" for="fileAudio">📁 Choose audio (.wav/.mp3/.m4a/.webm)</label>
+                <label class="file-chip" for="fileAudio">Choose audio (.wav/.mp3/.m4a/.webm)</label>
                 <input id="fileAudio" type="file" accept=".wav,.mp3,.m4a,.webm" />
-                <button id="btnLoadDefaultAudio">⬇️ Load default audio</button>
+                <button id="btnLoadDefaultAudio">Load default audio</button>
                 <span id="audioName" class="pill" style="display:none;"></span>
             </div>
             <div class="audio-preview" id="audioPreview" style="display:none;">
@@ -235,350 +298,1460 @@
         <div class="section">
             <h3>2) Run</h3>
             <div class="row">
-                <label class="pill">Target FPS: <select id="selFps">
+                <label class="pill">Target FPS:
+                    <select id="selFps">
                         <option value="24">24</option>
                         <option value="30" selected>30</option>
                         <option value="60">60</option>
-                    </select></label>
-                <button id="btnAnalyzeViseme" disabled>Analyze Viseme (Heuristic)</button>
-                <button id="btnRunOnnx" disabled>Run ONNX (Transformer)</button>
-                <button id="btnRunBoth" disabled>Run Both</button>
+                    </select>
+                </label>
+                <button id="btnAnalyzeViseme" disabled>Run Viseme Baseline</button>
+                <button id="btnRunTcn" disabled>Run TCN</button>
+                <button id="btnRunTransformer" disabled>Run Transformer</button>
+                <button id="btnRunAll" disabled>Run All Three</button>
             </div>
-            <div class="progress">
-                <div id="progressViseme"></div>
-            </div>
-            <div class="progress">
-                <div id="progressOnnx"></div>
+            <div class="progress-grid">
+                <div class="progress-card">
+                    <span>Heuristic viseme</span>
+                    <div class="progress"><div id="progressViseme"></div></div>
+                </div>
+                <div class="progress-card">
+                    <span>Old TCN ONNX</span>
+                    <div class="progress"><div id="progressTcn"></div></div>
+                </div>
+                <div class="progress-card">
+                    <span>Tiny transformer ONNX</span>
+                    <div class="progress"><div id="progressTransformer"></div></div>
+                </div>
             </div>
             <div id="runStatus" class="status info" style="display:none;"></div>
         </div>
 
         <div class="section">
-            <h3>Enhancer</h3>
-            <div class="row">
+            <h3>3) Model Stats</h3>
+            <div class="grid-3">
+                <div class="model-card">
+                    <h4>Heuristic Viseme</h4>
+                    <div id="metaViseme" class="meta-list"></div>
+                    <div id="summaryViseme" class="output-summary">No output yet.</div>
+                </div>
+                <div class="model-card">
+                    <h4>Old TCN Neural Network</h4>
+                    <div id="metaTcn" class="meta-list"></div>
+                    <div id="summaryTcn" class="output-summary">No output yet.</div>
+                </div>
+                <div class="model-card">
+                    <h4>Tiny Transformer Neural Network</h4>
+                    <div id="metaTransformer" class="meta-list"></div>
+                    <div id="summaryTransformer" class="output-summary">No output yet.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>4) Side-by-side Output</h3>
+            <div class="row" style="margin-bottom: 12px;">
                 <label class="pill" style="display:flex; gap:8px; align-items:center;">
                     Movement scale
                     <input id="enhScale" type="range" min="0.5" max="2.0" step="0.05" value="1.00" />
                 </label>
                 <span id="enhScaleVal" class="pill">1.00x</span>
             </div>
-        </div>
 
-        <div class="grid-2">
-            <div class="section">
-                <div class="viewer-title">Heuristic Viseme → Blendshapes</div>
-                <div id="sceneViseme" class="scene">
-                    <div class="scene-loading" id="loadingViseme">Loading 3D...</div>
+            <div class="grid-3">
+                <div class="section" style="margin:0;">
+                    <div class="viewer-title">Heuristic Viseme Output</div>
+                    <div id="sceneViseme" class="scene">
+                        <div class="scene-loading" id="loadingViseme">Loading 3D preview...</div>
+                    </div>
+                    <div class="row" style="margin-top:6px; align-items:center;">
+                        <span id="lblFrameViseme" class="pill">Frame: 0/0</span>
+                        <input id="rangeViseme" type="range" min="0" max="0" value="0" style="flex:1;" />
+                    </div>
                 </div>
-                <div class="row" style="margin-top:6px; align-items:center;">
-                    <span id="lblFrameViseme" class="pill">Frame: 0/0</span>
-                    <input id="rangeViseme" type="range" min="0" max="0" value="0" style="flex:1;" />
-                </div>
-            </div>
 
-            <div class="section">
-                <div class="viewer-title">ONNX (Tiny Transformer) → Blendshapes</div>
-                <div id="sceneOnnx" class="scene">
-                    <div class="scene-loading" id="loadingOnnx">Loading 3D...</div>
+                <div class="section" style="margin:0;">
+                    <div class="viewer-title">TCN Neural Network Output</div>
+                    <div id="sceneTcn" class="scene">
+                        <div class="scene-loading" id="loadingTcn">Loading 3D preview...</div>
+                    </div>
+                    <div class="row" style="margin-top:6px; align-items:center;">
+                        <span id="lblFrameTcn" class="pill">Frame: 0/0</span>
+                        <input id="rangeTcn" type="range" min="0" max="0" value="0" style="flex:1;" />
+                    </div>
                 </div>
-                <div class="row" style="margin-top:6px; align-items:center;">
-                    <span id="lblFrameOnnx" class="pill">Frame: 0/0</span>
-                    <input id="rangeOnnx" type="range" min="0" max="0" value="0" style="flex:1;" />
+
+                <div class="section" style="margin:0;">
+                    <div class="viewer-title">Transformer Neural Network Output</div>
+                    <div id="sceneTransformer" class="scene">
+                        <div class="scene-loading" id="loadingTransformer">Loading 3D preview...</div>
+                    </div>
+                    <div class="row" style="margin-top:6px; align-items:center;">
+                        <span id="lblFrameTransformer" class="pill">Frame: 0/0</span>
+                        <input id="rangeTransformer" type="range" min="0" max="0" value="0" style="flex:1;" />
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="playback">
-            <button id="btnPlay" disabled>▶️ Play Both</button>
-            <button id="btnPause" disabled>⏸️ Pause</button>
-            <button id="btnStop" disabled>⏹️ Stop</button>
+            <button id="btnPlay" disabled>Play All</button>
+            <button id="btnPause" disabled>Pause</button>
+            <button id="btnStop" disabled>Stop</button>
             <audio id="audioPlayerViz" controls style="flex:1; display:none;"></audio>
         </div>
-        <div class="pill" style="margin-top:8px; text-align:center;">If they want to replay, they got to first press
-            stop and then again press play.</div>
+        <div class="pill" style="margin-top:8px; text-align:center;">If playback reaches the end, press Stop before replaying.</div>
     </div>
 
     <script type="module">
-        // ---- Minimal FFT fallback ----
-        class FallbackFFT { constructor(size) { if ((size & (size - 1)) !== 0) throw new Error('FFT size must be power of two'); this.size = size; const h = size >>> 1; this.cos = new Float32Array(h); this.sin = new Float32Array(h); for (let i = 0; i < h; i++) { const a = -2 * Math.PI * i / size; this.cos[i] = Math.cos(a); this.sin[i] = Math.sin(a); } this.rev = FallbackFFT._bitReverse(size); } createComplexArray() { return new Float32Array(this.size * 2); } realTransform(out, input) { const n = this.size; const r = new Float32Array(n), im = new Float32Array(n); const len = Math.min(input.length, n); for (let i = 0; i < len; i++) r[i] = input[i]; for (let i = 0; i < n; i++) { const j = this.rev[i]; if (j > i) { [r[i], r[j]] = [r[j], r[i]];[im[i], im[j]] = [im[j], im[i]]; } } for (let step = 1; step < n; step <<= 1) { const jump = step << 1, ts = n / jump; for (let i = 0; i < n; i += jump) { for (let j = 0; j < step; j++) { const k = (j * ts) | 0, wr = this.cos[k], wi = this.sin[k]; const ir = r[i + j + step], ii = im[i + j + step]; const tr = wr * ir - wi * ii, ti = wr * ii + wi * ir; r[i + j + step] = r[i + j] - tr; im[i + j + step] = im[i + j] - ti; r[i + j] += tr; im[i + j] += ti; } } } for (let i = 0; i < n; i++) { out[2 * i] = r[i]; out[2 * i + 1] = im[i]; } } static _bitReverse(n) { const out = new Uint32Array(n); const b = Math.log2(n) | 0; for (let i = 0; i < n; i++) { let x = i, y = 0; for (let t = 0; t < b; t++) { y = (y << 1) | (x & 1); x >>= 1; } out[i] = y >>> 0; } return out; } }
-        function getFFTClass() { return window.FFT || globalThis.FFT || FallbackFFT; }
+        class FallbackFFT {
+            constructor(size) {
+                if ((size & (size - 1)) !== 0) throw new Error("FFT size must be power of two");
+                this.size = size;
+                const half = size >>> 1;
+                this.cos = new Float32Array(half);
+                this.sin = new Float32Array(half);
+                for (let i = 0; i < half; i++) {
+                    const angle = -2 * Math.PI * i / size;
+                    this.cos[i] = Math.cos(angle);
+                    this.sin[i] = Math.sin(angle);
+                }
+                this.rev = FallbackFFT.bitReverse(size);
+            }
 
-        // ---- Globals ----
-        let audioBuffer = null, latestAudioUrl = null, mediaRecorder = null, recordingStream = null, audioChunks = [];
-        let THREE, GLTFLoader, OrbitControls;
+            createComplexArray() {
+                return new Float32Array(this.size * 2);
+            }
 
-        // Viewers (two independent scenes)
-        const viewers = {
-            viseme: { scene: null, camera: null, renderer: null, controls: null, gltf: null, meshes: [], frames: [], fps: 30, cur: 0 },
-            onnx: { scene: null, camera: null, renderer: null, controls: null, gltf: null, meshes: [], frames: [], fps: 30, cur: 0 }
+            realTransform(out, input) {
+                const n = this.size;
+                const real = new Float32Array(n);
+                const imag = new Float32Array(n);
+                const len = Math.min(input.length, n);
+                for (let i = 0; i < len; i++) real[i] = input[i];
+                for (let i = 0; i < n; i++) {
+                    const j = this.rev[i];
+                    if (j > i) {
+                        [real[i], real[j]] = [real[j], real[i]];
+                        [imag[i], imag[j]] = [imag[j], imag[i]];
+                    }
+                }
+                for (let step = 1; step < n; step <<= 1) {
+                    const jump = step << 1;
+                    const tableStep = n / jump;
+                    for (let i = 0; i < n; i += jump) {
+                        for (let j = 0; j < step; j++) {
+                            const k = (j * tableStep) | 0;
+                            const wr = this.cos[k];
+                            const wi = this.sin[k];
+                            const ir = real[i + j + step];
+                            const ii = imag[i + j + step];
+                            const tr = wr * ir - wi * ii;
+                            const ti = wr * ii + wi * ir;
+                            real[i + j + step] = real[i + j] - tr;
+                            imag[i + j + step] = imag[i + j] - ti;
+                            real[i + j] += tr;
+                            imag[i + j] += ti;
+                        }
+                    }
+                }
+                for (let i = 0; i < n; i++) {
+                    out[2 * i] = real[i];
+                    out[2 * i + 1] = imag[i];
+                }
+            }
+
+            static bitReverse(size) {
+                const out = new Uint32Array(size);
+                const bits = Math.log2(size) | 0;
+                for (let i = 0; i < size; i++) {
+                    let x = i;
+                    let y = 0;
+                    for (let b = 0; b < bits; b++) {
+                        y = (y << 1) | (x & 1);
+                        x >>= 1;
+                    }
+                    out[i] = y >>> 0;
+                }
+                return out;
+            }
+        }
+
+        function getFFTClass() {
+            return window.FFT || globalThis.FFT || FallbackFFT;
+        }
+
+        const BLENDSHAPE_NAMES = [
+            "_neutral", "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft",
+            "browOuterUpRight", "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft",
+            "eyeBlinkRight", "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight",
+            "eyeLookOutLeft", "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight", "eyeSquintLeft",
+            "eyeSquintRight", "eyeWideLeft", "eyeWideRight", "jawForward", "jawLeft", "jawOpen",
+            "jawRight", "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft",
+            "mouthFrownRight", "mouthFunnel", "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight",
+            "mouthPressLeft", "mouthPressRight", "mouthPucker", "mouthRight", "mouthRollLower",
+            "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper", "mouthSmileLeft", "mouthSmileRight",
+            "mouthStretchLeft", "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight",
+            "noseSneerLeft", "noseSneerRight"
+        ];
+
+        const MODEL_CONFIGS = {
+            viseme: {
+                key: "viseme",
+                label: "Heuristic Viseme",
+                architecture: "Rule-based acoustic viseme mapper",
+                parameters: 0,
+                sizeMb: "0.00 MB",
+                context: "Local frame heuristics, no learned context",
+                output: "52 blendshapes used for facial playback",
+                urls: []
+            },
+            tcn: {
+                key: "tcn",
+                label: "Old TCN",
+                architecture: "Temporal convolutional network",
+                parameters: 393787,
+                sizeMb: "1.51 MB",
+                context: "Dynamic sequence input, mel features at 100 Hz",
+                output: "59 values per frame (52 blendshapes + 7 pose)",
+                urls: [
+                    "../assets/best_tcn_model_train_50.onnx",
+                    "./assets/best_tcn_model_train_50.onnx",
+                    "https://cdn.jsdelivr.net/gh/sanjuhs/NN_training@main/assets/best_tcn_model_train_50.onnx",
+                    "https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/best_tcn_model_train_50.onnx"
+                ]
+            },
+            transformer: {
+                key: "transformer",
+                label: "Tiny Transformer",
+                architecture: "3-layer tiny transformer encoder",
+                parameters: 432443,
+                sizeMb: "2.32 MB",
+                context: "10-second chunks, 1000 mel frames with overlap",
+                output: "59 values per frame (52 blendshapes + 7 pose)",
+                urls: [
+                    "../assets/tiny_transformer_full10s_l1.onnx",
+                    "./assets/tiny_transformer_full10s_l1.onnx",
+                    "https://cdn.jsdelivr.net/gh/sanjuhs/NN_training@main/assets/tiny_transformer_full10s_l1.onnx",
+                    "https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/tiny_transformer_full10s_l1.onnx"
+                ]
+            }
         };
 
-        // ONNX model session
-        let onnxSession = null;
+        const DEFAULT_AUDIO_URLS = [
+            "../assets/sample-audio.wav",
+            "./assets/sample-audio.wav",
+            "https://cdn.jsdelivr.net/gh/sanjuhs/NN_training@main/assets/sample-audio.wav",
+            "https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav"
+        ];
 
-        // Playback
-        let isPlaying = false, targetFPS = 30, rafId = null, startTime = 0;
-        // Enhancer
+        const LOCAL_SERVER_COMMAND = "cd /Users/sanjayprasads/Desktop/Coding/Python/NN_training/Online-demo && ./run_demo.sh";
+        const RACCOON_MODEL_URL = "https://storage.googleapis.com/mediapipe-tasks/face_landmarker/raccoon_head.glb";
+
+        let audioBuffer = null;
+        let latestAudioUrl = null;
+        let mediaRecorder = null;
+        let recordingStream = null;
+        let audioChunks = [];
+        let THREE;
+        let GLTFLoader;
+        let OrbitControls;
+        let isPlaying = false;
+        let targetFPS = 30;
+        let rafId = null;
+        let startTime = 0;
         let movementScale = 1.0;
 
-        // UI elements
-        const btnRecStart = document.getElementById('btnRecStart');
-        const btnRecStop = document.getElementById('btnRecStop');
-        const btnRecClear = document.getElementById('btnRecClear');
-        const fileAudio = document.getElementById('fileAudio');
-        const btnLoadDefaultAudio = document.getElementById('btnLoadDefaultAudio');
-        const audioName = document.getElementById('audioName');
-        const audioPlayer = document.getElementById('audioPlayer');
-        const audioPlayerViz = document.getElementById('audioPlayerViz');
-        const audioPreview = document.getElementById('audioPreview');
-        const audioInfo = document.getElementById('audioInfo');
-        const audioStatus = document.getElementById('audioStatus');
+        const viewers = {
+            viseme: createViewerState("viseme"),
+            tcn: createViewerState("tcn"),
+            transformer: createViewerState("transformer")
+        };
 
-        const btnAnalyzeViseme = document.getElementById('btnAnalyzeViseme');
-        const btnRunOnnx = document.getElementById('btnRunOnnx');
-        const btnRunBoth = document.getElementById('btnRunBoth');
-        const selFps = document.getElementById('selFps');
-        const progressViseme = document.getElementById('progressViseme');
-        const progressOnnx = document.getElementById('progressOnnx');
-        const runStatus = document.getElementById('runStatus');
+        const sessions = {
+            tcn: null,
+            transformer: null
+        };
 
-        const sceneViseme = document.getElementById('sceneViseme');
-        const sceneOnnx = document.getElementById('sceneOnnx');
-        const lblFrameViseme = document.getElementById('lblFrameViseme');
-        const lblFrameOnnx = document.getElementById('lblFrameOnnx');
-        const rangeViseme = document.getElementById('rangeViseme');
-        const rangeOnnx = document.getElementById('rangeOnnx');
+        function createViewerState(key) {
+            return {
+                key,
+                scene: null,
+                camera: null,
+                renderer: null,
+                controls: null,
+                gltf: null,
+                meshes: [],
+                frames: [],
+                fps: 30,
+                cur: 0
+            };
+        }
 
-        const btnPlay = document.getElementById('btnPlay');
-        const btnPause = document.getElementById('btnPause');
-        const btnStop = document.getElementById('btnStop');
-        const enhScale = document.getElementById('enhScale');
-        const enhScaleVal = document.getElementById('enhScaleVal');
+        const btnRecStart = document.getElementById("btnRecStart");
+        const btnRecStop = document.getElementById("btnRecStop");
+        const btnRecClear = document.getElementById("btnRecClear");
+        const fileAudio = document.getElementById("fileAudio");
+        const btnLoadDefaultAudio = document.getElementById("btnLoadDefaultAudio");
+        const audioName = document.getElementById("audioName");
+        const audioPlayer = document.getElementById("audioPlayer");
+        const audioPlayerViz = document.getElementById("audioPlayerViz");
+        const audioPreview = document.getElementById("audioPreview");
+        const audioInfo = document.getElementById("audioInfo");
+        const audioStatus = document.getElementById("audioStatus");
+        const environmentNotice = document.getElementById("environmentNotice");
 
-        const DEFAULT_MODEL_URLS = ['../assets/tiny_transformer_full10s_l1.onnx', 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/tiny_transformer_full10s_l1.onnx'];
-        const DEFAULT_AUDIO_URL = 'https://raw.githubusercontent.com/sanjuhs/NN_training/main/assets/sample-audio.wav';
+        const btnAnalyzeViseme = document.getElementById("btnAnalyzeViseme");
+        const btnRunTcn = document.getElementById("btnRunTcn");
+        const btnRunTransformer = document.getElementById("btnRunTransformer");
+        const btnRunAll = document.getElementById("btnRunAll");
+        const selFps = document.getElementById("selFps");
+        const progressViseme = document.getElementById("progressViseme");
+        const progressTcn = document.getElementById("progressTcn");
+        const progressTransformer = document.getElementById("progressTransformer");
+        const runStatus = document.getElementById("runStatus");
 
-        // ---- Utils ----
-        function setStatus(el, cls, msg) { el.className = `status ${cls}`; el.textContent = msg; el.style.display = 'block'; }
-        function setProgress(el, p) { el.style.width = `${Math.max(0, Math.min(100, p))}%`; }
-        function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+        const sceneMap = {
+            viseme: document.getElementById("sceneViseme"),
+            tcn: document.getElementById("sceneTcn"),
+            transformer: document.getElementById("sceneTransformer")
+        };
 
-        // ---- Three.js scene helpers ----
-        async function ensureThree() { if (THREE) return; THREE = await import('three'); ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js')); ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js')); }
+        const loadingMap = {
+            viseme: document.getElementById("loadingViseme"),
+            tcn: document.getElementById("loadingTcn"),
+            transformer: document.getElementById("loadingTransformer")
+        };
+
+        const frameLabelMap = {
+            viseme: document.getElementById("lblFrameViseme"),
+            tcn: document.getElementById("lblFrameTcn"),
+            transformer: document.getElementById("lblFrameTransformer")
+        };
+
+        const rangeMap = {
+            viseme: document.getElementById("rangeViseme"),
+            tcn: document.getElementById("rangeTcn"),
+            transformer: document.getElementById("rangeTransformer")
+        };
+
+        const metaMap = {
+            viseme: document.getElementById("metaViseme"),
+            tcn: document.getElementById("metaTcn"),
+            transformer: document.getElementById("metaTransformer")
+        };
+
+        const summaryMap = {
+            viseme: document.getElementById("summaryViseme"),
+            tcn: document.getElementById("summaryTcn"),
+            transformer: document.getElementById("summaryTransformer")
+        };
+
+        const btnPlay = document.getElementById("btnPlay");
+        const btnPause = document.getElementById("btnPause");
+        const btnStop = document.getElementById("btnStop");
+        const enhScale = document.getElementById("enhScale");
+        const enhScaleVal = document.getElementById("enhScaleVal");
+
+        const melCfg = { sr: 16000, nFFT: 512, hop: 160, win: 400, nMels: 80, fmin: 0, fmax: 8000, amin: 1e-10, norm: "slaney", htk: false };
+        const FEATURE_MEAN = null;
+        const FEATURE_STD = null;
+        const ONNX_CHUNK_FRAMES = 1000;
+        const ONNX_CHUNK_OVERLAP_FRAMES = 500;
+
+        function setStatus(el, cls, msg) {
+            el.className = `status ${cls}`;
+            el.textContent = msg;
+            el.style.display = "block";
+        }
+
+        function setProgress(el, percent) {
+            el.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        }
+
+        function clamp01(x) {
+            return Math.max(0, Math.min(1, x));
+        }
+
+        function formatInteger(value) {
+            return new Intl.NumberFormat("en-US").format(value);
+        }
+
+        function getErrorMessage(error) {
+            if (!error) return "Unknown error";
+            if (typeof error === "string") return error;
+            if (typeof error === "number") return `WebAssembly runtime error code ${error}`;
+            if (error.message) return error.message;
+            if (error.type) return `${error.type} event`;
+            try {
+                return JSON.stringify(error);
+            } catch (_) {
+                return String(error);
+            }
+        }
+
+        function isFileProtocol() {
+            return window.location.protocol === "file:";
+        }
+
+        function showEnvironmentNotice() {
+            if (isFileProtocol()) {
+                setStatus(
+                    environmentNotice,
+                    "error",
+                    `This comparison page is running from file://, so default asset downloads may fail. Start the local server with: ${LOCAL_SERVER_COMMAND}`
+                );
+            }
+        }
+
+        function renderModelMetadata() {
+            for (const [key, config] of Object.entries(MODEL_CONFIGS)) {
+                metaMap[key].innerHTML = [
+                    metaRow("Architecture", config.architecture),
+                    metaRow("Parameters", formatInteger(config.parameters)),
+                    metaRow("ONNX size", config.sizeMb),
+                    metaRow("Input", "80 mel features @ 100 Hz"),
+                    metaRow("Context", config.context),
+                    metaRow("Output", config.output)
+                ].join("");
+            }
+        }
+
+        function metaRow(label, value) {
+            return `
+                <div class="meta-row">
+                    <span class="meta-label">${label}</span>
+                    <span class="meta-value">${value}</span>
+                </div>
+            `;
+        }
+
+        function updateOutputSummary(which) {
+            const frames = viewers[which].frames;
+            if (!frames.length) {
+                summaryMap[which].textContent = "No output yet.";
+                return;
+            }
+            summaryMap[which].textContent = `Output ready: ${frames.length} frames @ ${viewers[which].fps} FPS`;
+        }
+
+        async function fetchFirstAvailable(urls, responseType) {
+            let lastError = null;
+            for (const url of urls) {
+                try {
+                    const resp = await fetch(url, { cache: "no-store" });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    if (responseType === "arrayBuffer") {
+                        return { value: await resp.arrayBuffer(), url };
+                    }
+                    if (responseType === "blob") {
+                        return { value: await resp.blob(), url };
+                    }
+                    throw new Error(`Unsupported response type: ${responseType}`);
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+            throw lastError || new Error("Could not fetch any default asset");
+        }
+
+        async function createOnnxSession(arrayBuffer) {
+            if (!window.ort) throw new Error("ONNX runtime not available");
+            return window.ort.InferenceSession.create(arrayBuffer, {
+                executionProviders: ["wasm"]
+            });
+        }
+
+        async function ensureThree() {
+            if (THREE) return;
+            THREE = await import("three");
+            ({ GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js"));
+            ({ OrbitControls } = await import("three/addons/controls/OrbitControls.js"));
+        }
 
         async function initViewer(which) {
             await ensureThree();
-            const container = which === 'viseme' ? sceneViseme : sceneOnnx;
-            const v = viewers[which];
-            const w = container.clientWidth, h = container.clientHeight;
-            v.scene = new THREE.Scene(); v.scene.background = new THREE.Color(0x1a1a1a);
-            v.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100); v.camera.position.set(0, 0, 4);
-            v.renderer = new THREE.WebGLRenderer({ antialias: true }); v.renderer.setSize(w, h); v.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
-            container.innerHTML = ''; container.appendChild(v.renderer.domElement);
-            const amb = new THREE.AmbientLight(0xffffff, 0.85); v.scene.add(amb);
-            const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(2, 2, 3); v.scene.add(dir);
-            const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-2, 1, 2); v.scene.add(fill);
-            v.controls = new OrbitControls(v.camera, v.renderer.domElement); v.controls.enableDamping = true; v.controls.dampingFactor = 0.05; v.controls.target.set(0, 0, 0); v.controls.update();
-            await loadRaccoon(which);
+            const container = sceneMap[which];
+            const viewer = viewers[which];
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            viewer.scene = new THREE.Scene();
+            viewer.scene.background = new THREE.Color(0x1a1a1a);
+
+            viewer.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 100);
+            viewer.camera.position.set(0, 0, 4);
+
+            viewer.renderer = new THREE.WebGLRenderer({ antialias: true });
+            viewer.renderer.setSize(width, height);
+            viewer.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+            container.innerHTML = "";
+            container.appendChild(viewer.renderer.domElement);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+            viewer.scene.add(ambient);
+            const directional = new THREE.DirectionalLight(0xffffff, 1.0);
+            directional.position.set(2, 2, 3);
+            viewer.scene.add(directional);
+            const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+            fill.position.set(-2, 1, 2);
+            viewer.scene.add(fill);
+
+            viewer.controls = new OrbitControls(viewer.camera, viewer.renderer.domElement);
+            viewer.controls.enableDamping = true;
+            viewer.controls.dampingFactor = 0.05;
+            viewer.controls.target.set(0, 0, 0);
+            viewer.controls.update();
+
+            try {
+                await loadRaccoon(which);
+            } catch (error) {
+                console.error(`${which} preview unavailable`, error);
+                const notice = document.createElement("div");
+                notice.className = "scene-loading";
+                notice.textContent = "3D preview unavailable, but output comparison still works.";
+                container.appendChild(notice);
+            }
         }
 
         async function loadRaccoon(which) {
-            const v = viewers[which];
+            const viewer = viewers[which];
             return new Promise((resolve, reject) => {
                 const loader = new GLTFLoader();
                 loader.load(
-                    'https://storage.googleapis.com/mediapipe-tasks/face_landmarker/raccoon_head.glb',
+                    RACCOON_MODEL_URL,
                     (gltf) => {
-                        if (v.gltf) { v.scene.remove(v.gltf); v.meshes = []; }
-                        v.gltf = gltf.scene; v.scene.add(v.gltf);
-                        const box = new THREE.Box3().setFromObject(v.gltf);
+                        if (viewer.gltf) {
+                            viewer.scene.remove(viewer.gltf);
+                            viewer.meshes = [];
+                        }
+
+                        viewer.gltf = gltf.scene;
+                        viewer.scene.add(viewer.gltf);
+
+                        const box = new THREE.Box3().setFromObject(viewer.gltf);
                         const size = box.getSize(new THREE.Vector3());
                         const center = box.getCenter(new THREE.Vector3());
-                        v.gltf.position.sub(center);
-                        const s = 1.6 / Math.max(size.x, size.y, size.z);
-                        v.gltf.scale.setScalar(s);
-                        v.gltf.traverse(o => { if (o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences) { v.meshes.push(o); } });
+                        viewer.gltf.position.sub(center);
+                        const scale = 1.6 / Math.max(size.x, size.y, size.z);
+                        viewer.gltf.scale.setScalar(scale);
+
+                        viewer.gltf.traverse((obj) => {
+                            if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
+                                viewer.meshes.push(obj);
+                            }
+                        });
                         resolve();
-                    }, undefined, (err) => { console.error('Model load error', err); reject(err); }
+                    },
+                    undefined,
+                    (error) => {
+                        console.error(`${which} model load error`, error);
+                        reject(new Error(getErrorMessage(error)));
+                    }
                 );
             });
         }
 
         function renderLoop() {
             requestAnimationFrame(renderLoop);
-            for (const k of Object.keys(viewers)) {
-                const v = viewers[k];
-                if (v.controls) v.controls.update();
-                if (v.renderer && v.scene && v.camera) v.renderer.render(v.scene, v.camera);
+            for (const viewer of Object.values(viewers)) {
+                if (viewer.controls) viewer.controls.update();
+                if (viewer.renderer && viewer.scene && viewer.camera) {
+                    viewer.renderer.render(viewer.scene, viewer.camera);
+                }
             }
         }
 
-        function applyBlendshapes(which, blends) {
-            const v = viewers[which]; if (!v || !v.meshes.length) return;
-            for (const mesh of v.meshes) {
-                const dict = mesh.morphTargetDictionary, infl = mesh.morphTargetInfluences; if (!dict || !infl) continue;
-                for (const [name, val] of Object.entries(blends || {})) {
-                    if (name in dict) {
-                        const idx = dict[name]; if (infl[idx] != null) {
-                            const target = clamp01((val || 0) * movementScale);
-                            infl[idx] = THREE.MathUtils.lerp(infl[idx], target, 0.35);
-                        }
-                    }
+        function applyBlendshapes(which, blendshapes) {
+            const viewer = viewers[which];
+            if (!viewer.meshes.length) return;
+
+            for (const mesh of viewer.meshes) {
+                const dict = mesh.morphTargetDictionary;
+                const influences = mesh.morphTargetInfluences;
+                if (!dict || !influences) continue;
+
+                for (const [name, value] of Object.entries(blendshapes || {})) {
+                    if (!(name in dict)) continue;
+                    const index = dict[name];
+                    if (influences[index] == null) continue;
+                    const target = clamp01((value || 0) * movementScale);
+                    influences[index] = THREE.MathUtils.lerp(influences[index], target, 0.35);
                 }
             }
         }
 
         function updateFrameLabels() {
-            const vV = viewers.viseme, vO = viewers.onnx;
-            lblFrameViseme.textContent = `Frame: ${vV.frames.length ? (vV.cur + 1) : 0}/${vV.frames.length}`;
-            lblFrameOnnx.textContent = `Frame: ${vO.frames.length ? (vO.cur + 1) : 0}/${vO.frames.length}`;
-            rangeViseme.max = Math.max(0, vV.frames.length - 1).toString(); rangeViseme.value = vV.cur.toString();
-            rangeOnnx.max = Math.max(0, vO.frames.length - 1).toString(); rangeOnnx.value = vO.cur.toString();
+            for (const key of Object.keys(viewers)) {
+                const viewer = viewers[key];
+                frameLabelMap[key].textContent = `Frame: ${viewer.frames.length ? viewer.cur + 1 : 0}/${viewer.frames.length}`;
+                rangeMap[key].max = Math.max(0, viewer.frames.length - 1).toString();
+                rangeMap[key].value = viewer.cur.toString();
+            }
         }
 
-        // ---- Audio handling ----
+        async function loadAudioFromBlob(blob, name) {
+            try {
+                if (latestAudioUrl) {
+                    URL.revokeObjectURL(latestAudioUrl);
+                    latestAudioUrl = null;
+                }
+
+                latestAudioUrl = URL.createObjectURL(blob);
+                audioPlayer.src = latestAudioUrl;
+                audioPlayerViz.src = latestAudioUrl;
+                audioPlayerViz.style.display = "block";
+                audioPreview.style.display = "block";
+
+                const arr = await blob.arrayBuffer();
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                audioBuffer = await ctx.decodeAudioData(arr);
+
+                audioName.textContent = name;
+                audioName.style.display = "inline-block";
+                audioInfo.textContent = `Duration: ${audioBuffer.duration.toFixed(2)}s | Sample Rate: ${audioBuffer.sampleRate} Hz`;
+                setStatus(audioStatus, "success", "Audio ready");
+                updateEnableStates();
+            } catch (error) {
+                audioBuffer = null;
+                updateEnableStates();
+                setStatus(audioStatus, "error", `Failed to decode audio: ${getErrorMessage(error)}`);
+            }
+        }
+
+        function clearAudio() {
+            if (latestAudioUrl) {
+                URL.revokeObjectURL(latestAudioUrl);
+                latestAudioUrl = null;
+            }
+            audioPlayer.src = "";
+            audioPlayerViz.src = "";
+            audioPlayerViz.style.display = "none";
+            audioBuffer = null;
+            audioPreview.style.display = "none";
+            audioStatus.style.display = "none";
+            audioName.textContent = "";
+            audioName.style.display = "none";
+            for (const key of Object.keys(viewers)) {
+                setPlaybackData(key, [], 30);
+            }
+            updateEnableStates();
+        }
+
+        function updateEnableStates() {
+            const hasAudio = !!audioBuffer;
+            btnAnalyzeViseme.disabled = !hasAudio;
+            btnRunTcn.disabled = !(hasAudio && sessions.tcn);
+            btnRunTransformer.disabled = !(hasAudio && sessions.transformer);
+            btnRunAll.disabled = !(hasAudio && sessions.tcn && sessions.transformer);
+            btnPlay.disabled = !Object.values(viewers).some((viewer) => viewer.frames.length);
+            btnPause.disabled = true;
+            btnStop.disabled = btnPlay.disabled;
+        }
+
         btnRecStart.onclick = async () => {
             try {
                 recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const mime = (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) ? 'audio/webm;codecs=opus' : '';
+                const mime = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+                    ? "audio/webm;codecs=opus"
+                    : "";
                 mediaRecorder = new MediaRecorder(recordingStream, mime ? { mimeType: mime } : undefined);
                 audioChunks = [];
-                mediaRecorder.ondataavailable = e => { if (e.data?.size) audioChunks.push(e.data); };
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data?.size) audioChunks.push(event.data);
+                };
                 mediaRecorder.onstop = async () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-                    await loadAudioFromBlob(blob, 'recording.webm');
+                    const blob = new Blob(audioChunks, { type: "audio/webm;codecs=opus" });
+                    await loadAudioFromBlob(blob, "recording.webm");
                     btnRecClear.disabled = false;
                 };
                 mediaRecorder.start(100);
-                btnRecStart.disabled = true; btnRecStop.disabled = false; btnRecClear.disabled = true;
-                setStatus(audioStatus, 'info', 'Recording...');
-            } catch (e) {
-                setStatus(audioStatus, 'error', 'Microphone access failed');
+                btnRecStart.disabled = true;
+                btnRecStop.disabled = false;
+                btnRecClear.disabled = true;
+                setStatus(audioStatus, "info", "Recording...");
+            } catch (_) {
+                setStatus(audioStatus, "error", "Microphone access failed");
             }
         };
+
         btnRecStop.onclick = () => {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
-            btnRecStart.disabled = false; btnRecStop.disabled = true;
-            setStatus(audioStatus, 'info', 'Processing recording...');
+            if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+            if (recordingStream) recordingStream.getTracks().forEach((track) => track.stop());
+            btnRecStart.disabled = false;
+            btnRecStop.disabled = true;
+            setStatus(audioStatus, "info", "Processing recording...");
         };
-        btnRecClear.onclick = () => { clearAudio(); };
-        fileAudio.onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; await loadAudioFromBlob(f, f.name || 'audio'); btnRecClear.disabled = false; };
-        btnLoadDefaultAudio.onclick = async () => { try { const resp = await fetch(DEFAULT_AUDIO_URL, { cache: 'no-store' }); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); const blob = await resp.blob(); await loadAudioFromBlob(blob, 'sample-audio.wav'); btnRecClear.disabled = true; } catch (e) { setStatus(audioStatus, 'error', `Load default failed: ${e.message}`); } };
 
-        function clearAudio() { if (latestAudioUrl) { URL.revokeObjectURL(latestAudioUrl); latestAudioUrl = null; } audioPlayer.src = ''; audioPlayerViz.src = ''; audioBuffer = null; audioPreview.style.display = 'none'; audioStatus.style.display = 'none'; audioName.textContent = ''; audioName.style.display = 'none'; updateEnableStates(); setPlaybackData('viseme', [], 30); setPlaybackData('onnx', [], 30); }
+        btnRecClear.onclick = () => {
+            clearAudio();
+        };
 
-        async function loadAudioFromBlob(blob, name) { try { if (latestAudioUrl) { URL.revokeObjectURL(latestAudioUrl); latestAudioUrl = null; } latestAudioUrl = URL.createObjectURL(blob); audioPlayer.src = latestAudioUrl; audioPlayerViz.src = latestAudioUrl; audioPreview.style.display = 'block'; const arr = await blob.arrayBuffer(); const ctx = new (window.AudioContext || window.webkitAudioContext)(); audioBuffer = await ctx.decodeAudioData(arr); audioName.textContent = name; audioName.style.display = 'inline-block'; audioInfo.textContent = `Duration: ${audioBuffer.duration.toFixed(2)}s | SR: ${audioBuffer.sampleRate} Hz`; setStatus(audioStatus, 'success', 'Audio ready'); updateEnableStates(); } catch (e) { setStatus(audioStatus, 'error', 'Failed to decode audio'); audioBuffer = null; updateEnableStates(); } }
+        fileAudio.onchange = async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            await loadAudioFromBlob(file, file.name || "audio");
+            btnRecClear.disabled = false;
+        };
 
-        function updateEnableStates() { const hasAudio = !!audioBuffer; btnAnalyzeViseme.disabled = !hasAudio; btnRunOnnx.disabled = !(hasAudio && onnxSession); btnRunBoth.disabled = !(hasAudio && onnxSession); btnPlay.disabled = !(viewers.viseme.frames.length || viewers.onnx.frames.length); btnPause.disabled = true; btnStop.disabled = !btnPlay.disabled; }
+        btnLoadDefaultAudio.onclick = async () => {
+            try {
+                const { value: blob, url } = await fetchFirstAvailable(DEFAULT_AUDIO_URLS, "blob");
+                await loadAudioFromBlob(blob, url.startsWith("http") ? "sample-audio.wav (default)" : "sample-audio.wav (local asset)");
+                btnRecClear.disabled = true;
+            } catch (error) {
+                setStatus(audioStatus, "error", `Load default failed: ${getErrorMessage(error)}`);
+            }
+        };
 
-        // ---- Heuristic Viseme pipeline (reuse from visemes2) ----
-        function buildHann(n) { const w = new Float32Array(n); for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)); return w; }
-        function mixToMono(abuf) { const L = abuf.length, chs = abuf.numberOfChannels; const out = new Float32Array(L); for (let c = 0; c < chs; c++) { const d = abuf.getChannelData(c); for (let i = 0; i < L; i++) out[i] += d[i] / chs; } return out; }
-        function linearResample(x, src, dst) { if (src === dst) return x.slice(); const dur = x.length / src; const N = Math.round(dur * dst); const y = new Float32Array(N); const r = (x.length - 1) / (N - 1); for (let i = 0; i < N; i++) { const t = i * r; const i0 = Math.floor(t), i1 = Math.min(i0 + 1, x.length - 1), a = t - i0; y[i] = (1 - a) * x[i0] + a * x[i1]; } return y; }
-        function computeZCR(frame, n) { let z = 0, prev = frame[0]; for (let i = 1; i < n; i++) { const v = frame[i]; if ((prev >= 0 && v < 0) || (prev < 0 && v >= 0)) z++; prev = v; } return z / n; }
-        function map(v, a, b) { return (v - a) / (b - a + 1e-9); }
-        function clamp(v, lo = 0, hi = 1) { return Math.max(lo, Math.min(hi, v)); }
-        function classifyViseme(f) { const rms = f.rms, z = f.zcr, c = f.centroid, flat = f.flatness; if (rms < 0.015) return { label: 'sil', intensity: 0.0 }; if (flat > 0.6 && c > 0.6) return { label: (c > 0.75 ? 'S' : 'F'), intensity: clamp(map(rms, 0.02, 0.15)) }; if (z < 0.05 && c < 0.3 && rms < 0.08) return { label: 'M', intensity: clamp(map(0.08 - rms, 0.0, 0.08)) }; if (c < 0.35 && rms >= 0.05) return { label: (rms > 0.12 ? 'O' : 'U'), intensity: clamp(map(rms, 0.05, 0.18)) }; if (c > 0.62 && z > 0.2) return { label: 'E', intensity: clamp(map(rms, 0.03, 0.15)) }; if (c > 0.45 && c < 0.6 && z < 0.25) return { label: 'L', intensity: clamp(map(rms, 0.03, 0.12)) }; return { label: 'A', intensity: clamp(map(rms, 0.03, 0.18)) }; }
-        function visemeToBlendshapes(label, intensity) { const bs = {}; const I = (v) => clamp(v * intensity); const setLR = (l, r, val) => { bs[l] = I(val); bs[r] = I(val); }; switch (label) { case 'sil': bs['mouthClose'] = I(0.9); bs['jawOpen'] = I(0.0); setLR('mouthPressLeft', 'mouthPressRight', 0.1); break; case 'A': bs['jawOpen'] = I(0.75); setLR('mouthSmileLeft', 'mouthSmileRight', 0.15); setLR('mouthLowerDownLeft', 'mouthLowerDownRight', 0.35); bs['mouthClose'] = I(0.0); break; case 'E': setLR('mouthSmileLeft', 'mouthSmileRight', 0.6); setLR('mouthStretchLeft', 'mouthStretchRight', 0.55); bs['jawOpen'] = I(0.2); bs['mouthClose'] = I(0.0); break; case 'O': bs['mouthFunnel'] = I(0.85); bs['mouthPucker'] = I(0.65); bs['jawOpen'] = I(0.3); bs['mouthClose'] = I(0.0); break; case 'U': bs['mouthPucker'] = I(0.85); bs['mouthFunnel'] = I(0.35); bs['jawOpen'] = I(0.18); bs['mouthClose'] = I(0.0); break; case 'F': setLR('mouthLowerDownLeft', 'mouthLowerDownRight', 0.45); setLR('mouthPressLeft', 'mouthPressRight', 0.55); bs['jawOpen'] = I(0.15); bs['mouthClose'] = I(0.2); break; case 'S': bs['jawOpen'] = I(0.12); bs['mouthClose'] = I(0.25); bs['mouthRollUpper'] = I(0.25); bs['mouthRollLower'] = I(0.25); break; case 'M': bs['mouthClose'] = I(0.9); setLR('mouthPressLeft', 'mouthPressRight', 0.5); bs['jawOpen'] = I(0.05); break; case 'TH': bs['jawOpen'] = I(0.25); setLR('mouthStretchLeft', 'mouthStretchRight', 0.25); bs['mouthClose'] = I(0.05); break; case 'L': bs['jawOpen'] = I(0.28); bs['mouthRollUpper'] = I(0.2); setLR('mouthSmileLeft', 'mouthSmileRight', 0.15); break; default: bs['jawOpen'] = I(0.3); } return bs; }
+        function buildHann(n) {
+            const w = new Float32Array(n);
+            for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1));
+            return w;
+        }
+
+        function mixToMono(abuf) {
+            const length = abuf.length;
+            const channels = abuf.numberOfChannels;
+            const out = new Float32Array(length);
+            for (let c = 0; c < channels; c++) {
+                const data = abuf.getChannelData(c);
+                for (let i = 0; i < length; i++) out[i] += data[i] / channels;
+            }
+            return out;
+        }
+
+        function linearResample(x, src, dst) {
+            if (src === dst) return x.slice();
+            const duration = x.length / src;
+            const targetLength = Math.round(duration * dst);
+            const out = new Float32Array(targetLength);
+            const ratio = (x.length - 1) / (targetLength - 1);
+            for (let i = 0; i < targetLength; i++) {
+                const t = i * ratio;
+                const i0 = Math.floor(t);
+                const i1 = Math.min(i0 + 1, x.length - 1);
+                const a = t - i0;
+                out[i] = (1 - a) * x[i0] + a * x[i1];
+            }
+            return out;
+        }
+
+        function computeZCR(frame, n) {
+            let z = 0;
+            let prev = frame[0];
+            for (let i = 1; i < n; i++) {
+                const value = frame[i];
+                if ((prev >= 0 && value < 0) || (prev < 0 && value >= 0)) z++;
+                prev = value;
+            }
+            return z / n;
+        }
+
+        function mapValue(v, a, b) {
+            return (v - a) / (b - a + 1e-9);
+        }
+
+        function clamp(v, lo = 0, hi = 1) {
+            return Math.max(lo, Math.min(hi, v));
+        }
+
+        function classifyViseme(feature) {
+            const rms = feature.rms;
+            const z = feature.zcr;
+            const c = feature.centroid;
+            const flat = feature.flatness;
+            if (rms < 0.015) return { label: "sil", intensity: 0.0 };
+            if (flat > 0.6 && c > 0.6) return { label: c > 0.75 ? "S" : "F", intensity: clamp(mapValue(rms, 0.02, 0.15)) };
+            if (z < 0.05 && c < 0.3 && rms < 0.08) return { label: "M", intensity: clamp(mapValue(0.08 - rms, 0.0, 0.08)) };
+            if (c < 0.35 && rms >= 0.05) return { label: rms > 0.12 ? "O" : "U", intensity: clamp(mapValue(rms, 0.05, 0.18)) };
+            if (c > 0.62 && z > 0.2) return { label: "E", intensity: clamp(mapValue(rms, 0.03, 0.15)) };
+            if (c > 0.45 && c < 0.6 && z < 0.25) return { label: "L", intensity: clamp(mapValue(rms, 0.03, 0.12)) };
+            return { label: "A", intensity: clamp(mapValue(rms, 0.03, 0.18)) };
+        }
+
+        function visemeToBlendshapes(label, intensity) {
+            const blendshapes = {};
+            const scaled = (value) => clamp(value * intensity);
+            const setLR = (left, right, value) => {
+                blendshapes[left] = scaled(value);
+                blendshapes[right] = scaled(value);
+            };
+
+            switch (label) {
+                case "sil":
+                    blendshapes.mouthClose = scaled(0.9);
+                    blendshapes.jawOpen = scaled(0.0);
+                    setLR("mouthPressLeft", "mouthPressRight", 0.1);
+                    break;
+                case "A":
+                    blendshapes.jawOpen = scaled(0.75);
+                    setLR("mouthSmileLeft", "mouthSmileRight", 0.15);
+                    setLR("mouthLowerDownLeft", "mouthLowerDownRight", 0.35);
+                    break;
+                case "E":
+                    setLR("mouthSmileLeft", "mouthSmileRight", 0.6);
+                    setLR("mouthStretchLeft", "mouthStretchRight", 0.55);
+                    blendshapes.jawOpen = scaled(0.2);
+                    break;
+                case "O":
+                    blendshapes.mouthFunnel = scaled(0.85);
+                    blendshapes.mouthPucker = scaled(0.65);
+                    blendshapes.jawOpen = scaled(0.3);
+                    break;
+                case "U":
+                    blendshapes.mouthPucker = scaled(0.85);
+                    blendshapes.mouthFunnel = scaled(0.35);
+                    blendshapes.jawOpen = scaled(0.18);
+                    break;
+                case "F":
+                    setLR("mouthLowerDownLeft", "mouthLowerDownRight", 0.45);
+                    setLR("mouthPressLeft", "mouthPressRight", 0.55);
+                    blendshapes.jawOpen = scaled(0.15);
+                    blendshapes.mouthClose = scaled(0.2);
+                    break;
+                case "S":
+                    blendshapes.jawOpen = scaled(0.12);
+                    blendshapes.mouthClose = scaled(0.25);
+                    blendshapes.mouthRollUpper = scaled(0.25);
+                    blendshapes.mouthRollLower = scaled(0.25);
+                    break;
+                case "M":
+                    blendshapes.mouthClose = scaled(0.9);
+                    setLR("mouthPressLeft", "mouthPressRight", 0.5);
+                    blendshapes.jawOpen = scaled(0.05);
+                    break;
+                case "TH":
+                    blendshapes.jawOpen = scaled(0.25);
+                    setLR("mouthStretchLeft", "mouthStretchRight", 0.25);
+                    blendshapes.mouthClose = scaled(0.05);
+                    break;
+                case "L":
+                    blendshapes.jawOpen = scaled(0.28);
+                    blendshapes.mouthRollUpper = scaled(0.2);
+                    setLR("mouthSmileLeft", "mouthSmileRight", 0.15);
+                    break;
+                default:
+                    blendshapes.jawOpen = scaled(0.3);
+                    break;
+            }
+
+            return blendshapes;
+        }
 
         async function analyzeVisemes(abuf, targetFps) {
-            const ch = abuf.numberOfChannels > 1 ? mixToMono(abuf) : abuf.getChannelData(0);
-            const x = linearResample(ch, abuf.sampleRate, 16000);
-            const sr = 16000, win = 400, hop = 160, nFFT = 512; const hann = buildHann(win);
-            const FFT = getFFTClass(); const f = new FFT(nFFT); const complex = f.createComplexArray();
+            const channel = abuf.numberOfChannels > 1 ? mixToMono(abuf) : abuf.getChannelData(0);
+            const x = linearResample(channel, abuf.sampleRate, 16000);
+            const sampleRate = 16000;
+            const win = 400;
+            const hop = 160;
+            const nFFT = 512;
+            const hann = buildHann(win);
+            const FFT = getFFTClass();
+            const fft = new FFT(nFFT);
+            const complex = fft.createComplexArray();
             const nFrames = Math.max(0, Math.floor((x.length - win) / hop) + 1);
-            const feats = [];
+            const features = [];
+
             for (let t = 0; t < nFrames; t++) {
-                if ((t % 50) === 0) setProgress(progressViseme, Math.min(40, Math.round((t / Math.max(1, nFrames)) * 40)));
-                const start = t * hop; const frame = new Float32Array(nFFT); let sumsq = 0;
-                for (let i = 0; i < win; i++) { const v = (x[start + i] || 0) * hann[i]; frame[i] = v; sumsq += v * v; }
-                const rms = Math.sqrt(sumsq / win); const zcr = computeZCR(frame, win);
-                f.realTransform(complex, frame);
-                const nFreqs = Math.floor(nFFT / 2) + 1; let magSum = 0, cenNum = 0, geoLogSum = 0, cnt = 0;
-                for (let k = 0; k < nFreqs; k++) { const rr = complex[2 * k], ii = complex[2 * k + 1]; const mag = Math.hypot(rr, ii) + 1e-10; magSum += mag; cenNum += (k * mag); geoLogSum += Math.log(mag); cnt++; }
-                const centroid = (magSum > 0) ? (cenNum / magSum) / nFreqs : 0; const flatness = Math.exp(geoLogSum / Math.max(1, cnt)) / (magSum / Math.max(1, cnt));
-                feats.push({ rms, zcr, centroid, flatness });
+                if ((t % 50) === 0) {
+                    setProgress(progressViseme, Math.min(40, Math.round((t / Math.max(1, nFrames)) * 40)));
+                }
+                const start = t * hop;
+                const frame = new Float32Array(nFFT);
+                let sumsq = 0;
+                for (let i = 0; i < win; i++) {
+                    const v = (x[start + i] || 0) * hann[i];
+                    frame[i] = v;
+                    sumsq += v * v;
+                }
+                const rms = Math.sqrt(sumsq / win);
+                const zcr = computeZCR(frame, win);
+                fft.realTransform(complex, frame);
+                const nFreqs = Math.floor(nFFT / 2) + 1;
+                let magSum = 0;
+                let centroidNum = 0;
+                let geoLogSum = 0;
+                let count = 0;
+                for (let k = 0; k < nFreqs; k++) {
+                    const rr = complex[2 * k];
+                    const ii = complex[2 * k + 1];
+                    const mag = Math.hypot(rr, ii) + 1e-10;
+                    magSum += mag;
+                    centroidNum += k * mag;
+                    geoLogSum += Math.log(mag);
+                    count++;
+                }
+                const centroid = magSum > 0 ? (centroidNum / magSum) / nFreqs : 0;
+                const flatness = Math.exp(geoLogSum / Math.max(1, count)) / (magSum / Math.max(1, count));
+                features.push({ rms, zcr, centroid, flatness });
             }
-            const labels = []; for (let i = 0; i < feats.length; i++) { const v = classifyViseme(feats[i]); const prev = labels[i - 1]?.label; if (prev && v.label !== prev && feats[i].rms < 0.04) v.label = prev; labels.push(v); }
-            const analysisFps = sr / hop; const aggRatio = analysisFps / targetFps; const out = [];
+
+            const labels = [];
+            for (let i = 0; i < features.length; i++) {
+                const value = classifyViseme(features[i]);
+                const prev = labels[i - 1]?.label;
+                if (prev && value.label !== prev && features[i].rms < 0.04) value.label = prev;
+                labels.push(value);
+            }
+
+            const analysisFps = sampleRate / hop;
+            const aggRatio = analysisFps / targetFps;
+            const out = [];
             for (let i = 0; i < Math.floor(labels.length / aggRatio); i++) {
-                const start = Math.floor(i * aggRatio), end = Math.min(labels.length, Math.floor((i + 1) * aggRatio));
-                const slice = labels.slice(start, end); const score = new Map(); let total = 0; slice.forEach(s => { score.set(s.label, (score.get(s.label) || 0) + s.intensity); total += s.intensity; });
-                let best = 'sil', bestVal = -1; for (const [k, v] of score) { if (v > bestVal) { best = k; bestVal = v; } }
-                const intensity = total / Math.max(1, slice.length); const blends = visemeToBlendshapes(best, intensity);
-                out.push({ blendshapes: blends });
+                const start = Math.floor(i * aggRatio);
+                const end = Math.min(labels.length, Math.floor((i + 1) * aggRatio));
+                const slice = labels.slice(start, end);
+                const score = new Map();
+                let total = 0;
+                slice.forEach((item) => {
+                    score.set(item.label, (score.get(item.label) || 0) + item.intensity);
+                    total += item.intensity;
+                });
+                let best = "sil";
+                let bestVal = -1;
+                for (const [key, value] of score.entries()) {
+                    if (value > bestVal) {
+                        best = key;
+                        bestVal = value;
+                    }
+                }
+                const intensity = total / Math.max(1, slice.length);
+                out.push({ blendshapes: visemeToBlendshapes(best, intensity) });
             }
+
             return { frames: out, fps: targetFps };
         }
 
-        // ---- ONNX pipeline (reuse from index.html) ----
-        const melCfg = { sr: 16000, nFFT: 512, hop: 160, win: 400, nMels: 80, fmin: 0, fmax: 8000, amin: 1e-10, norm: 'slaney', htk: false };
-        const FEATURE_MEAN = null, FEATURE_STD = null;
-        const ONNX_CHUNK_FRAMES = 1000, ONNX_CHUNK_OVERLAP_FRAMES = 500;
-        function hzToMel(hz, htk = false) { if (htk) return 2595 * Math.log10(1 + hz / 700); const f = hz / 700; return 1127.01048 * Math.log(1 + f); }
-        function melToHz(mel, htk = false) { if (htk) return 700 * (Math.pow(10, mel / 2595) - 1); return 700 * (Math.expm1(mel / 1127.01048)); }
-        function buildMelFilterBank(sr, nFFT, nMels, fmin, fmax, { norm = 'slaney', htk = false } = {}) { const nFreqs = Math.floor(nFFT / 2) + 1; const melMin = hzToMel(fmin, htk), melMax = hzToMel(fmax, htk); const mels = new Float32Array(nMels + 2); for (let i = 0; i < mels.length; i++) mels[i] = melMin + (i * (melMax - melMin) / (nMels + 1)); const hz = new Float32Array(mels.length); for (let i = 0; i < hz.length; i++) hz[i] = melToHz(mels[i], htk); const fftFreqs = new Float32Array(nFreqs); for (let i = 0; i < nFreqs; i++) fftFreqs[i] = (sr * i) / nFFT; const fb = Array.from({ length: nMels }, () => new Float32Array(nFreqs)); for (let m = 0; m < nMels; m++) { const fml = hz[m], fm = hz[m + 1], fmh = hz[m + 2]; for (let i = 0; i < nFreqs; i++) { const f = fftFreqs[i]; let w = 0; if (f >= fml && f <= fm) w = (f - fml) / (fm - fml); else if (f > fm && f <= fmh) w = (fmh - f) / (fmh - fm); fb[m][i] = Math.max(0, w); } } if (norm === 'slaney') { for (let m = 0; m < nMels; m++) { let area = 0; for (let i = 0; i < nFreqs; i++) area += fb[m][i]; if (area > 0) { const scale = 2.0 / (fmax - fmin); for (let i = 0; i < nFreqs; i++) fb[m][i] *= scale; } } } return fb; }
-        function stftPower(signal, { nFFT, hop, win }, hann) { const FFTCtor = getFFTClass(); const nFreqs = Math.floor(nFFT / 2) + 1; const nFrames = Math.max(0, Math.floor((signal.length - win) / hop) + 1); const out = new Float32Array(nFrames * nFreqs); const f = new FFTCtor(nFFT); const complex = f.createComplexArray(); const frameSig = new Float32Array(nFFT); for (let frame = 0; frame < nFrames; frame++) { const start = frame * hop; for (let i = 0; i < nFFT; i++) frameSig[i] = 0; for (let i = 0; i < win; i++) { frameSig[i] = (signal[start + i] || 0) * hann[i]; } f.realTransform(complex, frameSig); for (let k = 0; k < nFreqs; k++) { const rr = complex[2 * k], ii = complex[2 * k + 1]; out[frame * nFreqs + k] = rr * rr + ii * ii; } } return { data: out, nFrames, nFreqs }; }
-        function applyMel(fbank, P, nFrames, nFreqs, nMels) { const out = new Float32Array(nFrames * nMels); for (let t = 0; t < nFrames; t++) { const base = t * nFreqs; for (let m = 0; m < nMels; m++) { let e = 0; const filt = fbank[m]; for (let k = 0; k < nFreqs; k++) e += filt[k] * P[base + k]; out[t * nMels + m] = e; } } return out; }
-        function powerToLogMel(mel, amin = 1e-10) { const y = new Float32Array(mel.length); for (let i = 0; i < mel.length; i++) y[i] = Math.log10(Math.max(mel[i], amin)); return y; }
-        function normalizePerBin(melFrames, nFrames, nMels, mean = null, std = null) { const out = new Float32Array(melFrames.length); if (mean && std) { for (let t = 0; t < nFrames; t++) { for (let m = 0; m < nMels; m++) { const v = melFrames[t * nMels + m]; out[t * nMels + m] = (v - mean[m]) / (std[m] || 1e-6); } } } else { const mu = new Float32Array(nMels), sig = new Float32Array(nMels); for (let m = 0; m < nMels; m++) { let s = 0; for (let t = 0; t < nFrames; t++) s += melFrames[t * nMels + m]; mu[m] = s / nFrames; } for (let m = 0; m < nMels; m++) { let s = 0; for (let t = 0; t < nFrames; t++) { const d = melFrames[t * nMels + m] - mu[m]; s += d * d; } sig[m] = Math.sqrt(s / Math.max(1, nFrames - 1)) + 1e-6; } for (let t = 0; t < nFrames; t++) { for (let m = 0; m < nMels; m++) { const v = melFrames[t * nMels + m]; out[t * nMels + m] = (v - mu[m]) / sig[m]; } } } return out; }
-        async function extractMelFeatures(abuf) { const ch0 = abuf.getChannelData(0); const srIn = abuf.sampleRate; const x = linearResample(ch0, srIn, melCfg.sr); const hann = buildHann(melCfg.win); const { data: P, nFrames, nFreqs } = stftPower(x, melCfg, hann); const fb = buildMelFilterBank(melCfg.sr, melCfg.nFFT, melCfg.nMels, melCfg.fmin, melCfg.fmax, { norm: melCfg.norm, htk: melCfg.htk }); const mel = applyMel(fb, P, nFrames, nFreqs, melCfg.nMels); const logmel = powerToLogMel(mel, melCfg.amin); const norm = normalizePerBin(logmel, nFrames, melCfg.nMels, FEATURE_MEAN, FEATURE_STD); return { data: norm, frames: nFrames, originalDuration: abuf.duration }; }
-        function buildChunkStarts(totalFrames, chunkFrames, overlapFrames) { if (totalFrames <= chunkFrames) return [0]; const starts = []; const stepFrames = chunkFrames - overlapFrames; for (let start = 0; start <= totalFrames - chunkFrames; start += stepFrames) starts.push(start); const tailStart = totalFrames - chunkFrames; if (starts[starts.length - 1] !== tailStart) starts.push(tailStart); return Array.from(new Set(starts)); }
-        function buildChunkWeights(chunkFrames, overlapFrames) { const weights = new Float32Array(chunkFrames); weights.fill(1); if (overlapFrames <= 0) return weights; for (let i = 0; i < overlapFrames; i++) { const weight = (i + 1) / (overlapFrames + 1); weights[i] = weight; weights[chunkFrames - 1 - i] = weight; } return weights; }
-        async function runOnnxInferenceChunked(flatFeatures, totalFrames, featureDim, onProgress = null) { const chunkFrames = Math.min(ONNX_CHUNK_FRAMES, totalFrames); const overlapFrames = totalFrames > chunkFrames ? Math.min(ONNX_CHUNK_OVERLAP_FRAMES, chunkFrames - 1) : 0; const starts = buildChunkStarts(totalFrames, chunkFrames, overlapFrames); const chunkWeights = buildChunkWeights(chunkFrames, overlapFrames); const weightSums = new Float32Array(totalFrames); let merged = null; let outputDim = 0; for (let chunkIndex = 0; chunkIndex < starts.length; chunkIndex++) { const start = starts[chunkIndex]; const end = Math.min(start + chunkFrames, totalFrames); const currentChunkFrames = end - start; const chunkData = flatFeatures.slice(start * featureDim, end * featureDim); const input = new window.ort.Tensor('float32', chunkData, [1, currentChunkFrames, featureDim]); const feeds = {}; feeds[onnxSession.inputNames[0]] = input; const out = await onnxSession.run(feeds); const outData = out[onnxSession.outputNames[0]].data; if (!merged) { outputDim = outData.length / currentChunkFrames; merged = new Float32Array(totalFrames * outputDim); } for (let frame = 0; frame < currentChunkFrames; frame++) { const frameWeight = chunkWeights[frame]; const dstFrame = start + frame; weightSums[dstFrame] += frameWeight; for (let feature = 0; feature < outputDim; feature++) { merged[dstFrame * outputDim + feature] += outData[frame * outputDim + feature] * frameWeight; } } if (onProgress) onProgress((chunkIndex + 1) / starts.length); } for (let frame = 0; frame < totalFrames; frame++) { const invWeight = 1.0 / Math.max(weightSums[frame], 1e-6); for (let feature = 0; feature < outputDim; feature++) merged[frame * outputDim + feature] *= invWeight; } return { data: merged, frames: totalFrames, outputDim }; }
+        function hzToMel(hz, htk = false) {
+            if (htk) return 2595 * Math.log10(1 + hz / 700);
+            return 1127.01048 * Math.log(1 + hz / 700);
+        }
 
-        function makeOnnxFrames(outputData, numFrames, targetFps, originalDuration) {
-            const outputFeatures = 59; const originalFps = numFrames / originalDuration; let finalFrames = numFrames; let finalData = outputData; if (targetFps < originalFps) { const down = originalFps / targetFps; finalFrames = Math.floor(numFrames / down); finalData = new Float32Array(finalFrames * outputFeatures); for (let i = 0; i < finalFrames; i++) { const src = Math.floor(i * down); for (let j = 0; j < outputFeatures; j++) { finalData[i * outputFeatures + j] = outputData[src * outputFeatures + j]; } } } const frames = []; for (let i = 0; i < finalFrames; i++) {
-                const blends = {}; // first 52 are ARKit blendshapes (names as in index.html)
-                const names = ['_neutral', 'browDownLeft', 'browDownRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight', 'cheekPuff', 'cheekSquintLeft', 'cheekSquintRight', 'eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight', 'eyeSquintLeft', 'eyeSquintRight', 'eyeWideLeft', 'eyeWideRight', 'jawForward', 'jawLeft', 'jawOpen', 'jawRight', 'mouthClose', 'mouthDimpleLeft', 'mouthDimpleRight', 'mouthFrownLeft', 'mouthFrownRight', 'mouthFunnel', 'mouthLeft', 'mouthLowerDownLeft', 'mouthLowerDownRight', 'mouthPressLeft', 'mouthPressRight', 'mouthPucker', 'mouthRight', 'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper', 'mouthSmileLeft', 'mouthSmileRight', 'mouthStretchLeft', 'mouthStretchRight', 'mouthUpperUpLeft', 'mouthUpperUpRight', 'noseSneerLeft', 'noseSneerRight'];
-                for (let j = 0; j < 52; j++) { blends[names[j]] = finalData[i * outputFeatures + j]; }
-                frames.push({ blendshapes: blends });
+        function melToHz(mel, htk = false) {
+            if (htk) return 700 * (Math.pow(10, mel / 2595) - 1);
+            return 700 * Math.expm1(mel / 1127.01048);
+        }
+
+        function buildMelFilterBank(sr, nFFT, nMels, fmin, fmax, { norm = "slaney", htk = false } = {}) {
+            const nFreqs = Math.floor(nFFT / 2) + 1;
+            const melMin = hzToMel(fmin, htk);
+            const melMax = hzToMel(fmax, htk);
+            const mels = new Float32Array(nMels + 2);
+            for (let i = 0; i < mels.length; i++) {
+                mels[i] = melMin + (i * (melMax - melMin) / (nMels + 1));
+            }
+            const hz = new Float32Array(mels.length);
+            for (let i = 0; i < hz.length; i++) hz[i] = melToHz(mels[i], htk);
+            const fftFreqs = new Float32Array(nFreqs);
+            for (let i = 0; i < nFreqs; i++) fftFreqs[i] = (sr * i) / nFFT;
+
+            const filterBank = Array.from({ length: nMels }, () => new Float32Array(nFreqs));
+            for (let m = 0; m < nMels; m++) {
+                const low = hz[m];
+                const mid = hz[m + 1];
+                const high = hz[m + 2];
+                for (let i = 0; i < nFreqs; i++) {
+                    const freq = fftFreqs[i];
+                    let weight = 0;
+                    if (freq >= low && freq <= mid) weight = (freq - low) / (mid - low);
+                    else if (freq > mid && freq <= high) weight = (high - freq) / (high - mid);
+                    filterBank[m][i] = Math.max(0, weight);
+                }
+            }
+
+            if (norm === "slaney") {
+                for (let m = 0; m < nMels; m++) {
+                    let area = 0;
+                    for (let i = 0; i < nFreqs; i++) area += filterBank[m][i];
+                    if (area > 0) {
+                        const scale = 2.0 / (fmax - fmin);
+                        for (let i = 0; i < nFreqs; i++) filterBank[m][i] *= scale;
+                    }
+                }
+            }
+
+            return filterBank;
+        }
+
+        function stftPower(signal, { nFFT, hop, win }, hann) {
+            const FFT = getFFTClass();
+            const nFreqs = Math.floor(nFFT / 2) + 1;
+            const nFrames = Math.max(0, Math.floor((signal.length - win) / hop) + 1);
+            const out = new Float32Array(nFrames * nFreqs);
+            const fft = new FFT(nFFT);
+            const complex = fft.createComplexArray();
+            const frameSignal = new Float32Array(nFFT);
+
+            for (let frame = 0; frame < nFrames; frame++) {
+                const start = frame * hop;
+                frameSignal.fill(0);
+                for (let i = 0; i < win; i++) {
+                    frameSignal[i] = (signal[start + i] || 0) * hann[i];
+                }
+                fft.realTransform(complex, frameSignal);
+                for (let k = 0; k < nFreqs; k++) {
+                    const rr = complex[2 * k];
+                    const ii = complex[2 * k + 1];
+                    out[frame * nFreqs + k] = rr * rr + ii * ii;
+                }
+            }
+            return { data: out, nFrames, nFreqs };
+        }
+
+        function applyMel(filterBank, power, nFrames, nFreqs, nMels) {
+            const out = new Float32Array(nFrames * nMels);
+            for (let t = 0; t < nFrames; t++) {
+                const base = t * nFreqs;
+                for (let m = 0; m < nMels; m++) {
+                    let energy = 0;
+                    const filt = filterBank[m];
+                    for (let k = 0; k < nFreqs; k++) energy += filt[k] * power[base + k];
+                    out[t * nMels + m] = energy;
+                }
+            }
+            return out;
+        }
+
+        function powerToLogMel(mel, amin = 1e-10) {
+            const out = new Float32Array(mel.length);
+            for (let i = 0; i < mel.length; i++) out[i] = Math.log10(Math.max(mel[i], amin));
+            return out;
+        }
+
+        function normalizePerBin(melFrames, nFrames, nMels, mean = null, std = null) {
+            const out = new Float32Array(melFrames.length);
+            if (mean && std) {
+                for (let t = 0; t < nFrames; t++) {
+                    for (let m = 0; m < nMels; m++) {
+                        const value = melFrames[t * nMels + m];
+                        out[t * nMels + m] = (value - mean[m]) / (std[m] || 1e-6);
+                    }
+                }
+                return out;
+            }
+
+            const mu = new Float32Array(nMels);
+            const sig = new Float32Array(nMels);
+            for (let m = 0; m < nMels; m++) {
+                let sum = 0;
+                for (let t = 0; t < nFrames; t++) sum += melFrames[t * nMels + m];
+                mu[m] = sum / nFrames;
+            }
+            for (let m = 0; m < nMels; m++) {
+                let sum = 0;
+                for (let t = 0; t < nFrames; t++) {
+                    const diff = melFrames[t * nMels + m] - mu[m];
+                    sum += diff * diff;
+                }
+                sig[m] = Math.sqrt(sum / Math.max(1, nFrames - 1)) + 1e-6;
+            }
+            for (let t = 0; t < nFrames; t++) {
+                for (let m = 0; m < nMels; m++) {
+                    const value = melFrames[t * nMels + m];
+                    out[t * nMels + m] = (value - mu[m]) / sig[m];
+                }
+            }
+            return out;
+        }
+
+        async function extractMelFeatures(abuf) {
+            const channel = abuf.getChannelData(0);
+            const x = linearResample(channel, abuf.sampleRate, melCfg.sr);
+            const hann = buildHann(melCfg.win);
+            const { data: power, nFrames, nFreqs } = stftPower(x, melCfg, hann);
+            const filterBank = buildMelFilterBank(melCfg.sr, melCfg.nFFT, melCfg.nMels, melCfg.fmin, melCfg.fmax, {
+                norm: melCfg.norm,
+                htk: melCfg.htk
+            });
+            const mel = applyMel(filterBank, power, nFrames, nFreqs, melCfg.nMels);
+            const logMel = powerToLogMel(mel, melCfg.amin);
+            const norm = normalizePerBin(logMel, nFrames, melCfg.nMels, FEATURE_MEAN, FEATURE_STD);
+            return { data: norm, frames: nFrames, originalDuration: abuf.duration };
+        }
+
+        function buildChunkStarts(totalFrames, chunkFrames, overlapFrames) {
+            if (totalFrames <= chunkFrames) return [0];
+            const starts = [];
+            const step = chunkFrames - overlapFrames;
+            for (let start = 0; start <= totalFrames - chunkFrames; start += step) starts.push(start);
+            const tail = totalFrames - chunkFrames;
+            if (starts[starts.length - 1] !== tail) starts.push(tail);
+            return Array.from(new Set(starts));
+        }
+
+        function buildChunkWeights(chunkFrames, overlapFrames) {
+            const weights = new Float32Array(chunkFrames);
+            weights.fill(1);
+            if (overlapFrames <= 0) return weights;
+            for (let i = 0; i < overlapFrames; i++) {
+                const weight = (i + 1) / (overlapFrames + 1);
+                weights[i] = weight;
+                weights[chunkFrames - 1 - i] = weight;
+            }
+            return weights;
+        }
+
+        async function runDynamicOnnx(session, flatFeatures, totalFrames, featureDim, onProgress = null) {
+            const input = new window.ort.Tensor("float32", flatFeatures, [1, totalFrames, featureDim]);
+            const feeds = {};
+            feeds[session.inputNames[0]] = input;
+            const results = await session.run(feeds);
+            if (onProgress) onProgress(1);
+            return {
+                data: results[session.outputNames[0]].data,
+                frames: totalFrames
+            };
+        }
+
+        async function runTransformerChunked(session, flatFeatures, totalFrames, featureDim, onProgress = null) {
+            const chunkFrames = ONNX_CHUNK_FRAMES;
+            const overlapFrames = totalFrames > chunkFrames ? Math.min(ONNX_CHUNK_OVERLAP_FRAMES, chunkFrames - 1) : 0;
+            const starts = buildChunkStarts(totalFrames, chunkFrames, overlapFrames);
+            const chunkWeights = buildChunkWeights(chunkFrames, overlapFrames);
+            const weightSums = new Float32Array(totalFrames);
+
+            let merged = null;
+            let outputDim = 0;
+
+            for (let chunkIndex = 0; chunkIndex < starts.length; chunkIndex++) {
+                const start = starts[chunkIndex];
+                const end = Math.min(start + chunkFrames, totalFrames);
+                const currentChunkFrames = end - start;
+                const chunkData = new Float32Array(chunkFrames * featureDim);
+                chunkData.set(flatFeatures.slice(start * featureDim, end * featureDim));
+
+                const input = new window.ort.Tensor("float32", chunkData, [1, chunkFrames, featureDim]);
+                const feeds = {};
+                feeds[session.inputNames[0]] = input;
+                const results = await session.run(feeds);
+                const outData = results[session.outputNames[0]].data;
+
+                if (!merged) {
+                    outputDim = outData.length / chunkFrames;
+                    merged = new Float32Array(totalFrames * outputDim);
+                }
+
+                for (let frame = 0; frame < currentChunkFrames; frame++) {
+                    const weight = chunkWeights[frame];
+                    const dst = start + frame;
+                    weightSums[dst] += weight;
+                    for (let feature = 0; feature < outputDim; feature++) {
+                        merged[dst * outputDim + feature] += outData[frame * outputDim + feature] * weight;
+                    }
+                }
+
+                if (onProgress) onProgress((chunkIndex + 1) / starts.length);
+            }
+
+            for (let frame = 0; frame < totalFrames; frame++) {
+                const inv = 1.0 / Math.max(weightSums[frame], 1e-6);
+                for (let feature = 0; feature < outputDim; feature++) {
+                    merged[frame * outputDim + feature] *= inv;
+                }
+            }
+
+            return { data: merged, frames: totalFrames };
+        }
+
+        function makeModelFrames(outputData, numFrames, targetFps, originalDuration) {
+            const outputFeatures = 59;
+            const originalFps = numFrames / originalDuration;
+            let finalFrames = numFrames;
+            let finalData = outputData;
+
+            if (targetFps < originalFps) {
+                const down = originalFps / targetFps;
+                finalFrames = Math.floor(numFrames / down);
+                finalData = new Float32Array(finalFrames * outputFeatures);
+                for (let i = 0; i < finalFrames; i++) {
+                    const src = Math.floor(i * down);
+                    for (let j = 0; j < outputFeatures; j++) {
+                        finalData[i * outputFeatures + j] = outputData[src * outputFeatures + j];
+                    }
+                }
+            }
+
+            const frames = [];
+            for (let i = 0; i < finalFrames; i++) {
+                const blendshapes = {};
+                for (let j = 0; j < 52; j++) {
+                    blendshapes[BLENDSHAPE_NAMES[j]] = finalData[i * outputFeatures + j];
+                }
+                frames.push({ blendshapes });
             }
             return frames;
         }
 
-        // ---- Actions ----
+        async function ensureModelSession(which) {
+            if (sessions[which]) return sessions[which];
+            if (window.ort && window.ort.env && window.ort.env.wasm) {
+                window.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/";
+            }
+            const { value } = await fetchFirstAvailable(MODEL_CONFIGS[which].urls, "arrayBuffer");
+            sessions[which] = await createOnnxSession(value);
+            return sessions[which];
+        }
+
+        async function runModel(which, progressEl) {
+            if (!audioBuffer) return;
+
+            const statusLabel = which === "tcn" ? "TCN" : "Transformer";
+            setProgress(progressEl, 5);
+            setStatus(runStatus, "info", `Extracting mel features and running ${statusLabel}...`);
+
+            const session = await ensureModelSession(which);
+            const features = await extractMelFeatures(audioBuffer);
+            setProgress(progressEl, 45);
+
+            const out = which === "transformer"
+                ? await runTransformerChunked(session, features.data, features.frames, melCfg.nMels, (progress) => setProgress(progressEl, 45 + progress * 40))
+                : await runDynamicOnnx(session, features.data, features.frames, melCfg.nMels, (progress) => setProgress(progressEl, 45 + progress * 40));
+
+            setProgress(progressEl, 85);
+            const fps = parseInt(selFps.value, 10) || 30;
+            const frames = makeModelFrames(out.data, features.frames, fps, features.originalDuration);
+            setPlaybackData(which, frames, fps);
+            setProgress(progressEl, 100);
+            setStatus(runStatus, "success", `${statusLabel} ready: ${frames.length} frames @ ${fps} FPS`);
+        }
+
+        function setPlaybackData(which, frames, fps) {
+            const viewer = viewers[which];
+            viewer.frames = frames || [];
+            viewer.fps = fps || 30;
+            viewer.cur = 0;
+            updateFrameLabels();
+            updateOutputSummary(which);
+            if (viewer.frames.length) {
+                applyBlendshapes(which, viewer.frames[0].blendshapes);
+            }
+        }
+
         btnAnalyzeViseme.onclick = async () => {
-            if (!audioBuffer) return; btnAnalyzeViseme.disabled = true; setProgress(progressViseme, 5); setStatus(runStatus, 'info', 'Analyzing visemes...');
-            try { const fps = parseInt(selFps.value, 10) || 30; const res = await analyzeVisemes(audioBuffer, fps); setPlaybackData('viseme', res.frames, res.fps); setStatus(runStatus, 'success', `Viseme ready: ${res.frames.length} frames @ ${res.fps} fps`); } catch (e) { console.error(e); setStatus(runStatus, 'error', `Viseme analysis failed: ${e.message}`); } finally { setProgress(progressViseme, 100); btnAnalyzeViseme.disabled = false; updateEnableStates(); }
+            if (!audioBuffer) return;
+            btnAnalyzeViseme.disabled = true;
+            setProgress(progressViseme, 5);
+            setStatus(runStatus, "info", "Analyzing viseme baseline...");
+            try {
+                const fps = parseInt(selFps.value, 10) || 30;
+                const result = await analyzeVisemes(audioBuffer, fps);
+                setPlaybackData("viseme", result.frames, result.fps);
+                setProgress(progressViseme, 100);
+                setStatus(runStatus, "success", `Viseme ready: ${result.frames.length} frames @ ${result.fps} FPS`);
+            } catch (error) {
+                console.error(error);
+                setStatus(runStatus, "error", `Viseme analysis failed: ${getErrorMessage(error)}`);
+            } finally {
+                btnAnalyzeViseme.disabled = false;
+                updateEnableStates();
+            }
         };
 
-        btnRunOnnx.onclick = async () => {
-            if (!audioBuffer || !onnxSession) return; btnRunOnnx.disabled = true; setProgress(progressOnnx, 5); setStatus(runStatus, 'info', 'Extracting mel + running ONNX...');
-            try { const feats = await extractMelFeatures(audioBuffer); setProgress(progressOnnx, 45); const out = await runOnnxInferenceChunked(feats.data, feats.frames, melCfg.nMels, (progress) => setProgress(progressOnnx, 45 + progress * 40)); setProgress(progressOnnx, 85); const fps = parseInt(selFps.value, 10) || 30; const frames = makeOnnxFrames(out.data, feats.frames, fps, feats.originalDuration); setPlaybackData('onnx', frames, fps); setStatus(runStatus, 'success', `ONNX ready: ${frames.length} frames @ ${fps} fps`); } catch (e) { console.error(e); setStatus(runStatus, 'error', `ONNX failed: ${e.message}`); } finally { setProgress(progressOnnx, 100); btnRunOnnx.disabled = false; updateEnableStates(); }
+        btnRunTcn.onclick = async () => {
+            if (!audioBuffer) return;
+            btnRunTcn.disabled = true;
+            try {
+                await runModel("tcn", progressTcn);
+            } catch (error) {
+                console.error(error);
+                setStatus(runStatus, "error", `TCN failed: ${getErrorMessage(error)}`);
+            } finally {
+                btnRunTcn.disabled = false;
+                updateEnableStates();
+            }
         };
 
-        btnRunBoth.onclick = async () => {
-            btnRunBoth.disabled = true; try { await btnAnalyzeViseme.onclick(); await btnRunOnnx.onclick(); } finally { btnRunBoth.disabled = false; updateEnableStates(); }
+        btnRunTransformer.onclick = async () => {
+            if (!audioBuffer) return;
+            btnRunTransformer.disabled = true;
+            try {
+                await runModel("transformer", progressTransformer);
+            } catch (error) {
+                console.error(error);
+                setStatus(runStatus, "error", `Transformer failed: ${getErrorMessage(error)}`);
+            } finally {
+                btnRunTransformer.disabled = false;
+                updateEnableStates();
+            }
         };
 
-        function setPlaybackData(which, frames, fps) { const v = viewers[which]; v.frames = frames || []; v.fps = fps || 30; v.cur = 0; updateFrameLabels(); if (v.frames.length) { applyBlendshapes(which, v.frames[0].blendshapes); } }
+        btnRunAll.onclick = async () => {
+            btnRunAll.disabled = true;
+            try {
+                await btnAnalyzeViseme.onclick();
+                await btnRunTcn.onclick();
+                await btnRunTransformer.onclick();
+            } finally {
+                btnRunAll.disabled = false;
+                updateEnableStates();
+            }
+        };
 
-        // ---- Sync playback ----
-        function playBoth() { if (isPlaying) return; isPlaying = true; btnPlay.disabled = true; btnPause.disabled = false; btnStop.disabled = false; rangeViseme.disabled = true; rangeOnnx.disabled = true; const anyFps = viewers.onnx.frames.length ? viewers.onnx.fps : viewers.viseme.fps; targetFPS = parseInt(selFps.value, 10) || anyFps || 30; if (audioPlayerViz.src) { audioPlayerViz.currentTime = Math.min(viewers.viseme.cur, viewers.onnx.cur) / targetFPS; audioPlayerViz.play().catch(() => { }); } startTime = performance.now() - (Math.min(viewers.viseme.cur, viewers.onnx.cur) / targetFPS * 1000); animatePlayback(); }
-        function pauseBoth() { isPlaying = false; btnPlay.disabled = false; btnPause.disabled = true; rangeViseme.disabled = false; rangeOnnx.disabled = false; if (rafId) { cancelAnimationFrame(rafId); rafId = null; } if (audioPlayerViz) audioPlayerViz.pause(); }
-        function stopBoth() { pauseBoth(); viewers.viseme.cur = 0; viewers.onnx.cur = 0; applyIfExists('viseme'); applyIfExists('onnx'); updateFrameLabels(); if (audioPlayerViz) audioPlayerViz.currentTime = 0; }
-        function applyIfExists(which) { const v = viewers[which]; if (v.frames.length) { applyBlendshapes(which, v.frames[v.cur].blendshapes); } }
-        function animatePlayback() { if (!isPlaying) return; const curTime = (audioPlayerViz && audioPlayerViz.src && !audioPlayerViz.paused) ? audioPlayerViz.currentTime : (performance.now() - startTime) / 1000; const idx = Math.floor(curTime * targetFPS); let advanced = false; for (const k of ['viseme', 'onnx']) { const v = viewers[k]; if (v.frames.length) { const lim = v.frames.length; if (idx >= lim) { pauseBoth(); return; } if (idx !== v.cur) { v.cur = idx; applyBlendshapes(k, v.frames[v.cur].blendshapes); advanced = true; } } } if (advanced) updateFrameLabels(); rafId = requestAnimationFrame(animatePlayback); }
+        function applyIfExists(which) {
+            const viewer = viewers[which];
+            if (viewer.frames.length) {
+                applyBlendshapes(which, viewer.frames[viewer.cur].blendshapes);
+            }
+        }
 
-        btnPlay.onclick = playBoth; btnPause.onclick = pauseBoth; btnStop.onclick = stopBoth;
-        function refreshCurrentFrames() { applyIfExists('viseme'); applyIfExists('onnx'); }
-        enhScale.oninput = () => { movementScale = parseFloat(enhScale.value) || 1.0; enhScaleVal.textContent = `${movementScale.toFixed(2)}x`; refreshCurrentFrames(); };
-        rangeViseme.oninput = (e) => { viewers.viseme.cur = Math.max(0, Math.min(parseInt(e.target.value, 10) | 0, Math.max(0, viewers.viseme.frames.length - 1))); applyIfExists('viseme'); updateFrameLabels(); if (audioPlayerViz && audioPlayerViz.src) { audioPlayerViz.currentTime = Math.min(viewers.viseme.cur, viewers.onnx.cur) / (parseInt(selFps.value, 10) || 30); } };
-        rangeOnnx.oninput = (e) => { viewers.onnx.cur = Math.max(0, Math.min(parseInt(e.target.value, 10) | 0, Math.max(0, viewers.onnx.frames.length - 1))); applyIfExists('onnx'); updateFrameLabels(); if (audioPlayerViz && audioPlayerViz.src) { audioPlayerViz.currentTime = Math.min(viewers.viseme.cur, viewers.onnx.cur) / (parseInt(selFps.value, 10) || 30); } };
+        function playAll() {
+            if (isPlaying) return;
+            isPlaying = true;
+            btnPlay.disabled = true;
+            btnPause.disabled = false;
+            btnStop.disabled = false;
+            Object.values(rangeMap).forEach((range) => {
+                range.disabled = true;
+            });
 
-        window.addEventListener('resize', () => { for (const k of Object.keys(viewers)) { const v = viewers[k]; const container = (k === 'viseme') ? sceneViseme : sceneOnnx; if (!v.renderer || !v.camera) continue; const w = container.clientWidth, h = container.clientHeight; v.camera.aspect = w / h; v.camera.updateProjectionMatrix(); v.renderer.setSize(w, h); } });
+            const fallbackFps = viewers.transformer.frames.length
+                ? viewers.transformer.fps
+                : viewers.tcn.frames.length
+                    ? viewers.tcn.fps
+                    : viewers.viseme.fps;
+            targetFPS = parseInt(selFps.value, 10) || fallbackFps || 30;
 
-        // ---- ONNX model autoload ----
-        async function ensureOnnxSession() {
-            if (onnxSession) return; if (window.ort && window.ort.env && window.ort.env.wasm) { window.ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/'; }
-            try { setStatus(runStatus, 'info', 'Downloading default ONNX model...'); let buf = null; let lastError = null; for (const url of DEFAULT_MODEL_URLS) { try { const resp = await fetch(url, { cache: 'no-store' }); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); buf = await resp.arrayBuffer(); break; } catch (error) { lastError = error; } } if (!buf) throw lastError || new Error('Could not load default ONNX model'); onnxSession = await window.ort.InferenceSession.create(buf); setStatus(runStatus, 'success', 'ONNX model loaded'); } catch (e) { console.error(e); setStatus(runStatus, 'error', `Model load failed: ${e.message}`); }
+            const minFrame = Math.min(
+                viewers.viseme.cur || 0,
+                viewers.tcn.cur || 0,
+                viewers.transformer.cur || 0
+            );
+            if (audioPlayerViz.src) {
+                audioPlayerViz.currentTime = minFrame / targetFPS;
+                audioPlayerViz.play().catch(() => {});
+            }
+            startTime = performance.now() - (minFrame / targetFPS * 1000);
+            animatePlayback();
+        }
+
+        function pauseAll() {
+            isPlaying = false;
+            btnPlay.disabled = false;
+            btnPause.disabled = true;
+            Object.values(rangeMap).forEach((range) => {
+                range.disabled = false;
+            });
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (audioPlayerViz) audioPlayerViz.pause();
+        }
+
+        function stopAll() {
+            pauseAll();
+            for (const key of Object.keys(viewers)) {
+                viewers[key].cur = 0;
+                applyIfExists(key);
+            }
+            updateFrameLabels();
+            if (audioPlayerViz) audioPlayerViz.currentTime = 0;
+        }
+
+        function animatePlayback() {
+            if (!isPlaying) return;
+            const currentTime = (audioPlayerViz && audioPlayerViz.src && !audioPlayerViz.paused)
+                ? audioPlayerViz.currentTime
+                : (performance.now() - startTime) / 1000;
+            const index = Math.floor(currentTime * targetFPS);
+            let advanced = false;
+
+            for (const key of Object.keys(viewers)) {
+                const viewer = viewers[key];
+                if (!viewer.frames.length) continue;
+                if (index >= viewer.frames.length) {
+                    pauseAll();
+                    return;
+                }
+                if (index !== viewer.cur) {
+                    viewer.cur = index;
+                    applyBlendshapes(key, viewer.frames[viewer.cur].blendshapes);
+                    advanced = true;
+                }
+            }
+
+            if (advanced) updateFrameLabels();
+            rafId = requestAnimationFrame(animatePlayback);
+        }
+
+        btnPlay.onclick = playAll;
+        btnPause.onclick = pauseAll;
+        btnStop.onclick = stopAll;
+
+        function refreshCurrentFrames() {
+            for (const key of Object.keys(viewers)) applyIfExists(key);
+        }
+
+        enhScale.oninput = () => {
+            movementScale = parseFloat(enhScale.value) || 1.0;
+            enhScaleVal.textContent = `${movementScale.toFixed(2)}x`;
+            refreshCurrentFrames();
+        };
+
+        rangeMap.viseme.oninput = (event) => {
+            viewers.viseme.cur = Math.max(0, Math.min(parseInt(event.target.value, 10) | 0, Math.max(0, viewers.viseme.frames.length - 1)));
+            applyIfExists("viseme");
+            updateFrameLabels();
+        };
+
+        rangeMap.tcn.oninput = (event) => {
+            viewers.tcn.cur = Math.max(0, Math.min(parseInt(event.target.value, 10) | 0, Math.max(0, viewers.tcn.frames.length - 1)));
+            applyIfExists("tcn");
+            updateFrameLabels();
+        };
+
+        rangeMap.transformer.oninput = (event) => {
+            viewers.transformer.cur = Math.max(0, Math.min(parseInt(event.target.value, 10) | 0, Math.max(0, viewers.transformer.frames.length - 1)));
+            applyIfExists("transformer");
+            updateFrameLabels();
+        };
+
+        window.addEventListener("resize", () => {
+            for (const key of Object.keys(viewers)) {
+                const viewer = viewers[key];
+                const container = sceneMap[key];
+                if (!viewer.renderer || !viewer.camera) continue;
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                viewer.camera.aspect = width / height;
+                viewer.camera.updateProjectionMatrix();
+                viewer.renderer.setSize(width, height);
+            }
+        });
+
+        async function boot() {
+            renderModelMetadata();
+            showEnvironmentNotice();
+
+            await Promise.all([
+                initViewer("viseme"),
+                initViewer("tcn"),
+                initViewer("transformer")
+            ]);
+            renderLoop();
+
+            if (!isFileProtocol()) {
+                try {
+                    await Promise.all([ensureModelSession("tcn"), ensureModelSession("transformer")]);
+                } catch (error) {
+                    setStatus(runStatus, "error", `Model preload failed: ${getErrorMessage(error)}`);
+                }
+                try {
+                    const { value: blob } = await fetchFirstAvailable(DEFAULT_AUDIO_URLS, "blob");
+                    await loadAudioFromBlob(blob, "sample-audio.wav");
+                } catch (_) {
+                    // Leave audio unloaded; user can upload or record.
+                }
+            }
+
             updateEnableStates();
         }
 
-        // ---- Boot ----
-        (async function () { await Promise.all([initViewer('viseme'), initViewer('onnx')]); renderLoop(); await ensureOnnxSession(); try { const r = await fetch(DEFAULT_AUDIO_URL, { cache: 'no-store' }); if (r.ok) { const b = await r.blob(); await loadAudioFromBlob(b, 'sample-audio.wav'); } } catch (_) { } updateEnableStates(); })();
+        boot().catch((error) => {
+            console.error(error);
+            setStatus(runStatus, "error", `Page boot failed: ${getErrorMessage(error)}`);
+        });
     </script>
 </body>
 

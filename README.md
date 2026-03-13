@@ -1,61 +1,80 @@
-# Neural Network Training
+# NN_training
 
-# Online Demo
+This repository contains multiple neural-network experiments. The current primary track is the `V2A-over-training-old-nn` pipeline: voice to facial blendshapes.
+
+## Quick Start
+
+Run the local demo server from the `Online-demo` folder:
+
+```bash
+cd /Users/sanjayprasads/Desktop/Coding/Python/NN_training/Online-demo
+./run_demo.sh
+```
+
+Then open one of these pages:
+
+- `http://127.0.0.1:8000/Online-demo/transformer-model.html`
+- `http://127.0.0.1:8000/Online-demo/comparison.html`
+- `http://127.0.0.1:8000/Online-demo/index.html`
+
+Do not open the HTML files with `file://`.
+
+## Online Demo Pages
+
+- `transformer-model.html`
+  - Loads the tiny transformer ONNX model.
+  - Runs browser inference on audio and shows framewise blendshape output.
+  - Exports results locally in the browser.
+
+- `comparison.html`
+  - Compares three systems on the same audio:
+    - heuristic viseme baseline
+    - old TCN neural network
+    - tiny transformer neural network
+  - Shows model stats for each:
+    - architecture
+    - parameter count
+    - ONNX size
+    - context/input-output notes
+  - Shows side-by-side playback outputs for comparison.
+
+## Demo Assets
+
+The main browser demo assets live in [assets](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets):
+
+- [best_tcn_model_train_50.onnx](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets/best_tcn_model_train_50.onnx)
+- [tiny_transformer_full10s_l1.onnx](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets/tiny_transformer_full10s_l1.onnx)
+- [sample-audio.wav](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets/sample-audio.wav)
+
+The browser pages try local assets first and then fall back to CDN/GitHub-hosted copies when needed.
 
 ## V2A Project
 
-Please visit the following link to see the online demo for the V2A project. You will have to upload an ONNX model and an audio file to see the output. For the ONNX model please download the ONNX model from the following link:
+Goal:
 
-https://github.com/sanjuhs/NN_training/tree/main/assets
+- map voice to facial animation
+- predict `52 blendshapes + 7 pose values`
+- keep models small and practical for real-time use
 
-from the assets folder, please download the ONNX model and put it in the root directory of the project.
+Current focus:
 
-Here is the link to the online demo:
+- validate the pipeline with narrow overfit demos first
+- compare the old TCN against a newer tiny transformer baseline
+- keep the repo usable for browser demos and local experiments
 
-https://nn-training.vercel.app/
+Main working area:
 
-For local testing, do not open the HTML files directly with `file://`.
-Run a local server from the repo root:
+- [V2A-over-training-old-nn](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn)
 
-```bash
-python -m http.server 8000
-```
+Important docs:
 
-Then open:
+- [README_tiny_transformer.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/README_tiny_transformer.md)
+- [TinyTransformer_Overfit_Architecture.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/documentation/TinyTransformer_Overfit_Architecture.md)
+- [TinyTransformer_Quick_Status.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/documentation/TinyTransformer_Quick_Status.md)
+- [TinyTransformer_Conference_FAQ.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/documentation/TinyTransformer_Conference_FAQ.md)
 
-```text
-http://127.0.0.1:8000/Online-demo/transformer-model.html
-```
+## Notes
 
-# Project Overview
-
-The objective of this Neural Network Training directory is for me to do all my Neural Network training on this and to follow a bunch of different projects that I'd like to. The first and primary project that I'll be following through on will be the project where I will be converting voice into blend shapes. Basically I will take input voice of a person and from that I will infer a bunch of 52 numbers that will control the blend shape of a character. So, given some speech, the character will speak with that speech and will get animated with those specific blend shapes and that's the minor objective of this Neural Network Training that I'll do. My constraints are:
-
-1. It should be a small neural network
-2. It should be real-time
-3. It should be very low compute It should be as low as possible.
-
-So basically I'm trying to create a very tiny neural network that will convert voice into blend shapes that's the objective. Now according to Feasibility is the voice rich enough to actually give enough information to generate the blend shapes? I think yes. If so, you will also need something to embed the voice and the context of the voice itself because that would then help convey emotion of how the AI actor or the animated character should act or something like that. So I'm not sure about these parts but before we answer those difficult questions, I'm going to try to first overfit or create a very simple neural network and overfit it. The other part is to just give you some updates, I have already created an older neural network which is basically temporal convolutional neural network with the help of cloud. And I think I've messed it up and it's not working properly so to diagnose how it's working we are going to first overtrain it on a very simple training data set and we're going to make sure everything is working smooth and fine and then only we will move to the next stage.
-
-I will also try my best to have a Kaggle notebook wherever possible so that I can share the link to it and you all can replicate all the results that I have. I will also keep uploading this on Github and make this as public as possible so people can see the updates as and when they're happening.
-
-## Current Status
-
-All of the material related to this animation project is called the Voice-to-Animation project or V2A project. It will be named as V2A-project-subname, so any folder with that will be the nomenclature for you to go and check what is in that folder's training code and what that folder's code actually does.
-
-This repository is structured as a monorepo of sorts, containing all my neural network experiments. Please forgive me if it's a bit disorganized, but I've tried to organize it as much as possible.
-
-I will also be using one large virtual environment, and I will keep doing a pip freeze. So we will load that virtual environment and we will use that specifically for almost all of the projects.
-
-I'll also make sure that each of the folders has its own README file so that you can read that and understand or get an overview of what's going on in that specific folder, and it's relatively well organized there.
-
-My current repo is a M1 Mac, so my current work system is an M1 Mac. And if you have it, you should be able to replicate it fairly, simply, or easily.
-
-THe output of the V2A project is as follows:
-
-![alt text](V2A-over-training-old-nn/documentation/image.png)
-![alt text](V2A-over-training-old-nn/documentation/image-1.png)
-![alt text](V2A-over-training-old-nn/documentation/image-2.png)
-![alt text](V2A-over-training-old-nn/documentation/image-3.png)
-
-The output of the V2A project is as follows:
+- The repository is being developed on macOS and then tested in browser and GPU environments as needed.
+- Runpod is optional for heavier training; it is not required to run the demo pages locally.
+- If the hosted demo shows a local asset `404`, the page should still fall back to the remote asset sources.

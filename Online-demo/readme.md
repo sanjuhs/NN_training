@@ -1,45 +1,20 @@
-# Online Demo README
+# Online Demo
 
-## What To Run
+## Run Locally
 
-Run the demo from inside the `Online-demo` folder with:
+Start the local static server from inside `Online-demo`:
 
 ```bash
+cd /Users/sanjayprasads/Desktop/Coding/Python/NN_training/Online-demo
 ./run_demo.sh
 ```
 
-You can also run the Python server directly:
+Or run the Python entrypoint directly:
 
 ```bash
+cd /Users/sanjayprasads/Desktop/Coding/Python/NN_training/Online-demo
 python3 server.py
 ```
-
-## Why This Exists
-
-Do not open the HTML files with `file://`.
-
-That breaks local asset loading such as:
-
-- `../assets/tiny_transformer_full10s_l1.onnx`
-
-The local server fixes that by serving the **repo root** while letting you start it from the `Online-demo` folder.
-
-## URLs
-
-After starting the server, open:
-
-```text
-http://127.0.0.1:8000/Online-demo/transformer-model.html
-```
-
-Optional pages:
-
-```text
-http://127.0.0.1:8000/Online-demo/comparison.html
-http://127.0.0.1:8000/Online-demo/index.html
-```
-
-## Port
 
 Default port:
 
@@ -55,29 +30,63 @@ Custom port examples:
 python3 server.py --port 8010
 ```
 
-Then open:
+## Pages
+
+Transformer-only page:
 
 ```text
-http://127.0.0.1:8010/Online-demo/transformer-model.html
+http://127.0.0.1:8000/Online-demo/transformer-model.html
 ```
 
-## What The Server Does
+Three-way comparison page:
 
-`server.py` changes the working directory to the repository root and starts a standard Python static file server there.
+```text
+http://127.0.0.1:8000/Online-demo/comparison.html
+```
 
-That means:
+Landing page:
 
-- `Online-demo/...` is served correctly
-- `assets/...` is served correctly
-- the transformer ONNX file can load locally
+```text
+http://127.0.0.1:8000/Online-demo/index.html
+```
 
-## Quick Demo Checklist
+## What Each Page Does
 
-1. Open a terminal.
-2. `cd /Users/sanjayprasads/Desktop/Coding/Python/NN_training/Online-demo`
-3. Run `./run_demo.sh`
-4. Open `http://127.0.0.1:8000/Online-demo/transformer-model.html`
-5. If the default model does not auto-load yet in production, test locally first with the local server
+`transformer-model.html`
+
+- runs the tiny transformer ONNX model in the browser
+- takes uploaded, recorded, or sample audio
+- exports framewise blendshape output
+
+`comparison.html`
+
+- compares:
+  - heuristic viseme baseline
+  - old TCN ONNX model
+  - tiny transformer ONNX model
+- shows:
+  - parameter count
+  - ONNX size
+  - architecture summary
+  - side-by-side playback output
+
+## Assets
+
+The default demo assets live in:
+
+- [assets/best_tcn_model_train_50.onnx](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets/best_tcn_model_train_50.onnx)
+- [assets/tiny_transformer_full10s_l1.onnx](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets/tiny_transformer_full10s_l1.onnx)
+- [assets/sample-audio.wav](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/assets/sample-audio.wav)
+
+The pages try local assets first. If the hosted site returns a `404` for `/assets/...`, the pages fall back to remote CDN/GitHub copies.
+
+## Important
+
+Do not open the HTML files with `file://`.
+
+That breaks local asset loading and can also break browser security rules for model/audio fetching.
+
+Use the local server instead.
 
 ## Stop The Server
 
