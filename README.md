@@ -2,6 +2,31 @@
 
 This repository contains multiple neural-network experiments. The current primary track is the `V2A-over-training-old-nn` pipeline: voice to facial blendshapes.
 
+## Start Here
+
+- [GUIDE.md](GUIDE.md): repository navigation and the most important files.
+- [RUNPOD_TRAINING_REPORT.md](RUNPOD_TRAINING_REPORT.md): latest Runpod training results, model comparisons, synced checkpoints, and loss curves.
+- [RUNPOD_OVERNIGHT_EXPERIMENTS.md](RUNPOD_OVERNIGHT_EXPERIMENTS.md): overnight sweep log from March 21-22, 2026, including the stalled handoff, recovered wave 2, and partial wave 3.
+- [V2A-over-training-old-nn/README.md](V2A-over-training-old-nn/README.md): focused guide to the active audio-to-blendshapes project.
+
+## Latest Snapshot
+
+The latest overnight sweeps are synced under `runpod_results/overnight_sweeps`.
+
+- Best mouth/smile checkpoint so far:
+  - `runpod_results/overnight_sweeps/overnight_20260321_205258/overnight_20260321_205258__conv_d320_l12_b16`
+  - best mouth MAE `0.029945`
+  - best mouth/jaw corr `0.1892`
+  - best smile corr `0.4157`
+- Best composite-loss checkpoint so far:
+  - `runpod_results/overnight_sweeps/overnight_20260322_053753/overnight_20260322_053753__conv_d320_l12_b20_nadam_huber`
+  - best val loss `0.406168`
+  - best mouth MAE `0.031232`
+  - best mouth/jaw corr `0.1862`
+  - best smile corr `0.3814`
+
+The main lesson from these runs is that larger and newer variants can reduce the composite objective, but the strongest mouth and smile correlation still comes from the simpler conv transformer. That points back to target quality and calibration as the next bottleneck, not just architecture scale.
+
 ## Quick Start
 
 Run the local demo server from the `Online-demo` folder:
@@ -15,6 +40,7 @@ Then open one of these pages:
 
 - `http://127.0.0.1:8000/Online-demo/transformer-model.html`
 - `http://127.0.0.1:8000/Online-demo/comparison.html`
+- `http://127.0.0.1:8000/Online-demo/mediapipe-calibration.html`
 - `http://127.0.0.1:8000/Online-demo/index.html`
 
 Do not open the HTML files with `file://`.
@@ -37,6 +63,12 @@ Do not open the HTML files with `file://`.
     - ONNX size
     - context/input-output notes
   - Shows side-by-side playback outputs for comparison.
+
+- `mediapipe-calibration.html`
+  - Uploads the original source video and matching MediaPipe JSON.
+  - Plays the source video next to the raccoon head driven by extracted coefficients.
+  - Can also run live webcam tracking in-browser and drive the raccoon directly.
+  - Helps decide whether target calibration is needed before training.
 
 ## Demo Assets
 
@@ -65,13 +97,18 @@ Current focus:
 Main working area:
 
 - [V2A-over-training-old-nn](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn)
+- [runpod_results](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/runpod_results)
+- [infra/runpod](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/infra/runpod)
 
 Important docs:
 
+- [GUIDE.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/GUIDE.md)
+- [RUNPOD_TRAINING_REPORT.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/RUNPOD_TRAINING_REPORT.md)
 - [README_tiny_transformer.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/README_tiny_transformer.md)
 - [TinyTransformer_Overfit_Architecture.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/documentation/TinyTransformer_Overfit_Architecture.md)
 - [TinyTransformer_Quick_Status.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/documentation/TinyTransformer_Quick_Status.md)
 - [TinyTransformer_Conference_FAQ.md](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/V2A-over-training-old-nn/documentation/TinyTransformer_Conference_FAQ.md)
+- [Planning Transformer Questions](/Users/sanjayprasads/Desktop/Coding/Python/NN_training/Planning%20Transformer%20Questions/README.md)
 
 ## Notes
 

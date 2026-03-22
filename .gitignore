@@ -37,3 +37,11 @@ temp_processing/
 data/
 
 infra/runpod/runpod_info.md
+
+# Large experiment outputs and local model artifacts
+runpod_results/
+V2A-over-training-old-nn/2_architecture_training/models/*.pth
+V2A-over-training-old-nn/2_architecture_training/models/*.onnx
+V2A-over-training-old-nn/outputhtml/models/*.onnx
+V2A-over-training-old-nn/models/*.pth
+assets/*.onnx

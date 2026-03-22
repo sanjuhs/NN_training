@@ -25,6 +25,13 @@ ROOT_PATH = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_PATH))
 
 from models.tiny_transformer_model import TinyTransformerConfig, create_model
+from blendshape_layout import (
+    JAW_OPEN_INDEX,
+    MOUTH_AND_JAW_INDICES,
+    MOUTH_CLOSE_INDEX,
+    POSE_INDICES,
+    SMILE_INDICES,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,6 +68,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--temporal-weight", type=float, default=0.02)
+    parser.add_argument(
+        "--mouth-weight-scale",
+        type=float,
+        default=1.1,
+        help="Light up-weighting applied to mouth and jaw channels in the regression loss.",
+    )
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--d-model", type=int, default=128)
     parser.add_argument("--nhead", type=int, default=4)
@@ -262,17 +275,33 @@ def normalize_audio(
 
 
 class TemporalL1Loss(nn.Module):
-    def __init__(self, temporal_weight: float = 0.02) -> None:
+    def __init__(
+        self,
+        temporal_weight: float = 0.02,
+        mouth_weight_scale: float = 1.1,
+    ) -> None:
         super().__init__()
         self.temporal_weight = temporal_weight
-        self.l1 = nn.L1Loss()
+        self.mouth_weight_scale = mouth_weight_scale
 
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> Dict[str, torch.Tensor]:
-        l1_loss = self.l1(predictions, targets)
+        channel_weights = torch.ones(
+            predictions.size(-1),
+            device=predictions.device,
+            dtype=predictions.dtype,
+        )
+        mouth_indices = [idx for idx in MOUTH_AND_JAW_INDICES if idx < predictions.size(-1)]
+        if mouth_indices:
+            channel_weights[mouth_indices] = self.mouth_weight_scale
+
+        l1_per_element = torch.abs(predictions - targets)
+        l1_loss = (l1_per_element * channel_weights.view(1, 1, -1)).mean()
         if predictions.size(1) > 1 and self.temporal_weight > 0:
             pred_delta = predictions[:, 1:] - predictions[:, :-1]
             target_delta = targets[:, 1:] - targets[:, :-1]
-            temporal_loss = self.l1(pred_delta, target_delta)
+            temporal_loss = (
+                torch.abs(pred_delta - target_delta) * channel_weights.view(1, 1, -1)
+            ).mean()
         else:
             temporal_loss = predictions.new_tensor(0.0)
 
@@ -282,6 +311,45 @@ class TemporalL1Loss(nn.Module):
             "l1_loss": l1_loss,
             "temporal_loss": temporal_loss,
         }
+
+
+def compute_regression_metrics(
+    predictions: torch.Tensor,
+    targets: torch.Tensor,
+) -> Dict[str, float]:
+    pred_flat = predictions.reshape(-1, predictions.size(-1)).numpy()
+    target_flat = targets.reshape(-1, targets.size(-1)).numpy()
+    mae_per_channel = np.mean(np.abs(pred_flat - target_flat), axis=0)
+
+    def safe_corr(index: int) -> float:
+        if index >= pred_flat.shape[1]:
+            return 0.0
+        pred_column = pred_flat[:, index]
+        target_column = target_flat[:, index]
+        if np.std(pred_column) < 1e-8 or np.std(target_column) < 1e-8:
+            return 0.0
+        corr = np.corrcoef(pred_column, target_column)[0, 1]
+        return float(corr) if not np.isnan(corr) else 0.0
+
+    mouth_indices = [idx for idx in MOUTH_AND_JAW_INDICES if idx < mae_per_channel.shape[0]]
+    smile_indices = [idx for idx in SMILE_INDICES if idx < mae_per_channel.shape[0]]
+    pose_indices = [idx for idx in POSE_INDICES if idx < mae_per_channel.shape[0]]
+
+    smile_corrs = [safe_corr(idx) for idx in smile_indices]
+    smile_corr = float(np.mean(smile_corrs)) if smile_corrs else 0.0
+
+    metrics = {
+        "overall_mae": float(np.mean(mae_per_channel)),
+        "mouth_mae": float(np.mean(mae_per_channel[mouth_indices])) if mouth_indices else 0.0,
+        "jaw_open_mae": float(mae_per_channel[JAW_OPEN_INDEX]) if JAW_OPEN_INDEX < mae_per_channel.shape[0] else 0.0,
+        "mouth_close_mae": float(mae_per_channel[MOUTH_CLOSE_INDEX]) if MOUTH_CLOSE_INDEX < mae_per_channel.shape[0] else 0.0,
+        "smile_mae": float(np.mean(mae_per_channel[smile_indices])) if smile_indices else 0.0,
+        "pose_mae": float(np.mean(mae_per_channel[pose_indices])) if pose_indices else 0.0,
+        "jaw_open_corr": safe_corr(JAW_OPEN_INDEX),
+        "mouth_close_corr": safe_corr(MOUTH_CLOSE_INDEX),
+        "smile_corr": smile_corr,
+    }
+    return metrics
 
 
 def make_loader(
@@ -313,6 +381,7 @@ def run_epoch(
     scaler: torch.amp.GradScaler,
     device: torch.device,
     grad_clip: float,
+    collect_outputs: bool = False,
 ) -> Dict[str, float]:
     is_train = optimizer is not None
     model.train(is_train)
@@ -322,6 +391,8 @@ def run_epoch(
     total_temporal = 0.0
     total_grad_norm = 0.0
     num_batches = 0
+    predictions_buffer: List[torch.Tensor] = []
+    targets_buffer: List[torch.Tensor] = []
 
     for audio, targets, _vad in loader:
         audio = audio.to(device, non_blocking=True)
@@ -347,6 +418,10 @@ def run_epoch(
         total_temporal += float(loss_dict["temporal_loss"].detach().cpu())
         num_batches += 1
 
+        if collect_outputs:
+            predictions_buffer.append(predictions.detach().cpu())
+            targets_buffer.append(targets.detach().cpu())
+
     metrics = {
         "loss": total_loss / max(num_batches, 1),
         "l1_loss": total_l1 / max(num_batches, 1),
@@ -354,6 +429,13 @@ def run_epoch(
     }
     if is_train:
         metrics["grad_norm"] = total_grad_norm / max(num_batches, 1)
+    if collect_outputs and predictions_buffer:
+        metrics.update(
+            compute_regression_metrics(
+                predictions=torch.cat(predictions_buffer, dim=0),
+                targets=torch.cat(targets_buffer, dim=0),
+            )
+        )
     return metrics
 
 
@@ -453,7 +535,10 @@ def main() -> None:
     )
     model = create_model(asdict(model_config)).to(device)
 
-    criterion = TemporalL1Loss(temporal_weight=args.temporal_weight)
+    criterion = TemporalL1Loss(
+        temporal_weight=args.temporal_weight,
+        mouth_weight_scale=args.mouth_weight_scale,
+    )
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
@@ -473,25 +558,35 @@ def main() -> None:
         "val_loss": [],
         "val_l1_loss": [],
         "val_temporal_loss": [],
+        "val_overall_mae": [],
+        "val_mouth_mae": [],
+        "val_jaw_open_mae": [],
+        "val_mouth_close_mae": [],
+        "val_smile_mae": [],
+        "val_pose_mae": [],
+        "val_jaw_open_corr": [],
+        "val_mouth_close_corr": [],
+        "val_smile_corr": [],
         "learning_rate": [],
     }
 
     best_val_loss = float("inf")
     best_epoch = 0
 
-    print("=== Tiny Transformer Overfit Training ===")
-    print(f"Device: {device}")
-    print(f"Data dir: {args.data_dir}")
-    print(f"Audio shape: {audio.shape}")
-    print(f"Target shape: {targets.shape}")
+    print("=== Tiny Transformer Overfit Training ===", flush=True)
+    print(f"Device: {device}", flush=True)
+    print(f"Data dir: {args.data_dir}", flush=True)
+    print(f"Audio shape: {audio.shape}", flush=True)
+    print(f"Target shape: {targets.shape}", flush=True)
     if segment_ids is not None:
-        print(f"Distinct segment ids: {len(np.unique(segment_ids))}")
-    print(f"Split mode: {split_info.get('split_mode', 'unknown')}")
-    print(f"Split: train={train_idx}, gap={split_info['gap_indices']}, val={val_idx}")
+        print(f"Distinct segment ids: {len(np.unique(segment_ids))}", flush=True)
+    print(f"Split mode: {split_info.get('split_mode', 'unknown')}", flush=True)
+    print(f"Split: train={train_idx}, gap={split_info['gap_indices']}, val={val_idx}", flush=True)
     if "train_segments" in split_info or "val_segments" in split_info:
-        print(f"Train segments: {split_info.get('train_segments', [])}")
-        print(f"Val segments: {split_info.get('val_segments', [])}")
-    print(f"Model: {json.dumps(model.get_model_info(), indent=2)}")
+        print(f"Train segments: {split_info.get('train_segments', [])}", flush=True)
+        print(f"Val segments: {split_info.get('val_segments', [])}", flush=True)
+    print(f"Model: {json.dumps(model.get_model_info(), indent=2)}", flush=True)
+    print(f"Mouth weight scale: {args.mouth_weight_scale}", flush=True)
 
     for epoch in range(1, args.epochs + 1):
         train_metrics = run_epoch(
@@ -511,6 +606,7 @@ def main() -> None:
             scaler=scaler,
             device=device,
             grad_clip=args.grad_clip,
+            collect_outputs=True,
         )
         scheduler.step()
 
@@ -521,6 +617,15 @@ def main() -> None:
         history["val_loss"].append(val_metrics["loss"])
         history["val_l1_loss"].append(val_metrics["l1_loss"])
         history["val_temporal_loss"].append(val_metrics["temporal_loss"])
+        history["val_overall_mae"].append(val_metrics["overall_mae"])
+        history["val_mouth_mae"].append(val_metrics["mouth_mae"])
+        history["val_jaw_open_mae"].append(val_metrics["jaw_open_mae"])
+        history["val_mouth_close_mae"].append(val_metrics["mouth_close_mae"])
+        history["val_smile_mae"].append(val_metrics["smile_mae"])
+        history["val_pose_mae"].append(val_metrics["pose_mae"])
+        history["val_jaw_open_corr"].append(val_metrics["jaw_open_corr"])
+        history["val_mouth_close_corr"].append(val_metrics["mouth_close_corr"])
+        history["val_smile_corr"].append(val_metrics["smile_corr"])
         history["learning_rate"].append(optimizer.param_groups[0]["lr"])
 
         print(
@@ -529,8 +634,13 @@ def main() -> None:
             f"(l1={train_metrics['l1_loss']:.6f}, temp={train_metrics['temporal_loss']:.6f}) | "
             f"val_loss={val_metrics['loss']:.6f} "
             f"(l1={val_metrics['l1_loss']:.6f}, temp={val_metrics['temporal_loss']:.6f}) | "
+            f"val_mouth_mae={val_metrics['mouth_mae']:.6f} | "
+            f"jaw_r={val_metrics['jaw_open_corr']:.4f} | "
+            f"mouth_close_r={val_metrics['mouth_close_corr']:.4f} | "
+            f"smile_r={val_metrics['smile_corr']:.4f} | "
             f"grad={train_metrics['grad_norm']:.4f} | "
-            f"lr={optimizer.param_groups[0]['lr']:.6e}"
+            f"lr={optimizer.param_groups[0]['lr']:.6e}",
+            flush=True,
         )
 
         save_checkpoint(
@@ -567,17 +677,18 @@ def main() -> None:
                 split_info=split_info,
                 args=args,
             )
-            print(f"  Saved new best checkpoint to {args.checkpoint_path}")
+            print(f"  Saved new best checkpoint to {args.checkpoint_path}", flush=True)
 
         write_history(args.history_path, history)
 
         if epoch - best_epoch >= args.patience:
             print(
-                f"Early stopping at epoch {epoch} after {args.patience} epochs without improvement."
+                f"Early stopping at epoch {epoch} after {args.patience} epochs without improvement.",
+                flush=True,
             )
             break
 
-    print(f"Best validation loss: {best_val_loss:.6f} at epoch {best_epoch}")
+    print(f"Best validation loss: {best_val_loss:.6f} at epoch {best_epoch}", flush=True)
 
 
 if __name__ == "__main__":

@@ -16,11 +16,12 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 class FaceBlendshapeExtractor:
-    def __init__(self):
+    def __init__(self, use_gpu=False):
         """Initialize MediaPipe Face Landmarker with blendshapes"""
         self.mp_face_mesh = mp.solutions.face_mesh
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.use_gpu = use_gpu
         
         # MediaPipe blendshape names (52 categories)
         self.blendshape_names = [
@@ -40,15 +41,45 @@ class FaceBlendshapeExtractor:
         # Download the face landmarker model if it doesn't exist
         model_path = self._download_face_landmarker_model()
         
-        # Create Face Landmarker
-        base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.FaceLandmarkerOptions(
-            base_options=base_options,
+        # Create Face Landmarker. Try GPU first when requested, then fall back to CPU.
+        self.detector = self._create_detector(model_path)
+        self.running_mode = vision.RunningMode.VIDEO
+
+    def _create_detector(self, model_path):
+        base_kwargs = {"model_asset_path": model_path}
+
+        if self.use_gpu:
+            delegate_enum = getattr(python.BaseOptions, "Delegate", None)
+            if delegate_enum is not None and hasattr(delegate_enum, "GPU"):
+                try:
+                    print("Attempting MediaPipe GPU delegate...")
+                    gpu_options = vision.FaceLandmarkerOptions(
+                        base_options=python.BaseOptions(
+                            **base_kwargs,
+                            delegate=delegate_enum.GPU,
+                        ),
+                        running_mode=vision.RunningMode.VIDEO,
+                        output_face_blendshapes=True,
+                        output_facial_transformation_matrixes=True,
+                        num_faces=1,
+                    )
+                    detector = vision.FaceLandmarker.create_from_options(gpu_options)
+                    print("MediaPipe GPU delegate enabled.")
+                    return detector
+                except Exception as e:
+                    print(f"MediaPipe GPU delegate unavailable, falling back to CPU: {e}")
+            else:
+                print("MediaPipe GPU delegate not exposed by this Python build. Using CPU.")
+
+        cpu_options = vision.FaceLandmarkerOptions(
+            base_options=python.BaseOptions(**base_kwargs),
+            running_mode=vision.RunningMode.VIDEO,
             output_face_blendshapes=True,
             output_facial_transformation_matrixes=True,
-            num_faces=1
+            num_faces=1,
         )
-        self.detector = vision.FaceLandmarker.create_from_options(options)
+        print("MediaPipe CPU delegate enabled.")
+        return vision.FaceLandmarker.create_from_options(cpu_options)
         
     def _download_face_landmarker_model(self):
         """Download the face landmarker model if it doesn't exist"""
@@ -124,68 +155,66 @@ class FaceBlendshapeExtractor:
         print(f"Effective extraction FPS: {effective_fps}")
         
         # Calculate frames to process
-        frames_to_process = list(range(0, total_frames, frame_interval))
+        estimated_frames_to_process = list(range(0, total_frames, frame_interval))
         if max_frames:
-            frames_to_process = frames_to_process[:max_frames]
-        
-        print(f"Processing {len(frames_to_process)} frames out of {total_frames} total frames...")
-        
+            estimated_frames_to_process = estimated_frames_to_process[:max_frames]
+
+        print(f"Processing {len(estimated_frames_to_process)} frames out of {total_frames} total frames...")
+
         # Storage for extracted features
         frame_data = []
         failed_frames = []
-        
-        # Process frames
-        pbar = tqdm(total=len(frames_to_process), desc="Extracting features")
-        
-        for i, frame_idx in enumerate(frames_to_process):
-            # Seek to specific frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            
+
+        # Process frames sequentially; repeated random seeks are very slow on long videos.
+        pbar = tqdm(total=len(estimated_frames_to_process), desc="Extracting features")
+        current_frame_idx = 0
+        processed_frames = 0
+
+        while processed_frames < len(estimated_frames_to_process):
+            should_process = (current_frame_idx % frame_interval) == 0
+
+            if should_process:
+                ret, frame = cap.read()
+            else:
+                ret = cap.grab()
+                frame = None
+
             if not ret:
-                print(f"Failed to read frame {frame_idx}")
-                failed_frames.append(frame_idx)
-                # Add placeholder for failed frame
-                blendshapes = {name: 0.0 for name in self.blendshape_names}
-                placeholder = {
-                    'frame_index': frame_idx,
-                    'timestamp': frame_idx / fps,
-                    'blendshapes': blendshapes,
-                    'headPosition': {'x': 0.0, 'y': 0.0, 'z': 0.0},
-                    'headRotation': {'w': 1.0, 'x': 0.0, 'y': 0.0, 'z': 0.0},
-                    'has_face': False
-                }
-                frame_data.append(placeholder)
-                pbar.update(1)
+                break
+
+            if not should_process:
+                current_frame_idx += 1
                 continue
-            
+
             # Convert BGR to RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
+
             # Create MediaPipe Image
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-            
+
             # Extract features
-            features = self._extract_frame_features(mp_image, frame_idx)
-            
+            features = self._extract_frame_features(mp_image, current_frame_idx, fps)
+
             if features:
                 # Update timestamp to use original frame index for accurate timing
-                features['timestamp'] = frame_idx / fps
+                features['timestamp'] = current_frame_idx / fps
                 frame_data.append(features)
             else:
-                failed_frames.append(frame_idx)
+                failed_frames.append(current_frame_idx)
                 # Add placeholder data for failed frames
                 blendshapes = {name: 0.0 for name in self.blendshape_names}
                 placeholder = {
-                    'frame_index': frame_idx,
-                    'timestamp': frame_idx / fps,
+                    'frame_index': current_frame_idx,
+                    'timestamp': current_frame_idx / fps,
                     'blendshapes': blendshapes,
                     'headPosition': {'x': 0.0, 'y': 0.0, 'z': 0.0},
                     'headRotation': {'w': 1.0, 'x': 0.0, 'y': 0.0, 'z': 0.0},
                     'has_face': False
                 }
                 frame_data.append(placeholder)
-            
+
+            processed_frames += 1
+            current_frame_idx += 1
             pbar.update(1)
         
         pbar.close()
@@ -231,7 +260,7 @@ class FaceBlendshapeExtractor:
         
         return output_data
     
-    def _extract_frame_features(self, mp_image, frame_idx):
+    def _extract_frame_features(self, mp_image, frame_idx, fps):
         """
         Extract features from a single frame
         
@@ -244,7 +273,8 @@ class FaceBlendshapeExtractor:
         """
         try:
             # Detect face landmarks and blendshapes
-            detection_result = self.detector.detect(mp_image)
+            timestamp_ms = int(round((frame_idx / max(fps, 1e-6)) * 1000.0))
+            detection_result = self.detector.detect_for_video(mp_image, timestamp_ms)
             
             if not detection_result.face_landmarks:
                 return None  # No face detected

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RunPod Sample Viewer Redirect</title>
+</head>
+
+<body>
+    <p>Redirecting to the RunPod calibration sample viewer...</p>
+    <script>
+        const pageParams = new URLSearchParams(window.location.search);
+        const token = pageParams.get("token");
+        const target = new URL("./mediapipe-calibration.html", window.location.href);
+        const onRunPod = window.location.hostname.includes("proxy.runpod.net");
+        const videoPath = onRunPod
+            ? "/files/workspace/NN_training/V2A-over-training-old-nn/1_data_cleaning/hf_datasets/test_video/test.mp4"
+            : "../V2A-over-training-old-nn/1_data_cleaning/hf_datasets/test_video/test.mp4";
+        const jsonPath = onRunPod
+            ? "/files/workspace/NN_training/Online-demo/sample_data/test_video_mediapipe/blendshapes_and_pose.json"
+            : "../runpod_results/test_video_mediapipe/blendshapes_and_pose.json";
+        const videoUrl = new URL(videoPath, window.location.href);
+        const jsonUrl = new URL(jsonPath, window.location.href);
+
+        if (token) {
+            target.searchParams.set("token", token);
+            videoUrl.searchParams.set("token", token);
+            jsonUrl.searchParams.set("token", token);
+        }
+
+        target.searchParams.set("video", videoUrl.toString());
+        target.searchParams.set("json", jsonUrl.toString());
+        window.location.replace(target.toString());
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaPipe Calibration Viewer</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --panel: rgba(255, 252, 247, 0.94);
+            --panel-strong: #fffaf3;
+            --ink: #1c1a18;
+            --muted: #675f57;
+            --line: rgba(91, 72, 49, 0.16);
+            --accent: #0d7a6c;
+            --accent-strong: #09594f;
+            --warm: #c56c3d;
+            --danger: #b2473e;
+            --shadow: 0 24px 60px rgba(71, 51, 34, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(13, 122, 108, 0.16), transparent 28%),
+                radial-gradient(circle at top right, rgba(197, 108, 61, 0.18), transparent 24%),
+                linear-gradient(180deg, #f8f4ee 0%, var(--bg) 100%);
+            min-height: 100vh;
+        }
+
+        .shell {
+            max-width: 1480px;
+            margin: 0 auto;
+            padding: 28px 20px 36px;
+        }
+
+        .hero,
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            box-shadow: var(--shadow);
+        }
+
+        .hero {
+            padding: 28px;
+            margin-bottom: 18px;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: clamp(30px, 4vw, 46px);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 16px;
+            max-width: 980px;
+        }
+
+        .hero-note {
+            margin-top: 14px;
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            border: 1px solid rgba(13, 122, 108, 0.18);
+            border-radius: 999px;
+            padding: 9px 14px;
+            background: rgba(13, 122, 108, 0.08);
+            color: var(--accent-strong);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .panel {
+            padding: 18px;
+            margin-bottom: 18px;
+        }
+
+        .panel h2 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .file-card,
+        .stat-card {
+            background: var(--panel-strong);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 14px;
+        }
+
+        .file-card label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .file-card input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: white;
+            color: var(--ink);
+        }
+
+        .meta {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.45;
+            min-height: 38px;
+        }
+
+        .status {
+            display: none;
+            margin-top: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status.info {
+            display: block;
+            background: rgba(13, 122, 108, 0.08);
+            border: 1px solid rgba(13, 122, 108, 0.18);
+            color: var(--accent-strong);
+        }
+
+        .status.error {
+            display: block;
+            background: rgba(178, 71, 62, 0.1);
+            border: 1px solid rgba(178, 71, 62, 0.2);
+            color: var(--danger);
+        }
+
+        .download-link {
+            display: none;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: white;
+            color: var(--ink);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .download-link.visible {
+            display: inline-flex;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            appearance: none;
+            border: none;
+            border-radius: 999px;
+            padding: 12px 18px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            color: white;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            box-shadow: 0 10px 24px rgba(13, 122, 108, 0.2);
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, #b77c42, var(--warm));
+            box-shadow: 0 10px 24px rgba(197, 108, 61, 0.18);
+        }
+
+        button.ghost {
+            color: var(--ink);
+            background: white;
+            border: 1px solid var(--line);
+            box-shadow: none;
+        }
+
+        button:disabled {
+            opacity: 0.42;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .slider-row {
+            display: grid;
+            grid-template-columns: minmax(0, 240px) 1fr auto;
+            gap: 12px;
+            align-items: center;
+            margin-top: 14px;
+        }
+
+        .slider-row label {
+            font-weight: 700;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: white;
+            font-size: 13px;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .timeline {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .viewer-grid {
+            display: grid;
+            grid-template-columns: 1.05fr 1fr;
+            gap: 18px;
+            align-items: stretch;
+        }
+
+        .viewer-card {
+            background: var(--panel-strong);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 14px;
+            min-height: 540px;
+        }
+
+        .viewer-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .viewer-title h3 {
+            margin: 0;
+            font-size: 17px;
+        }
+
+        .viewer-body {
+            position: relative;
+            height: 464px;
+            border-radius: 18px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #181715 0%, #262320 100%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: black;
+        }
+
+        .live-note {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .scene-loading {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            color: rgba(255, 250, 243, 0.8);
+            font-weight: 600;
+            text-align: center;
+            padding: 22px;
+        }
+
+        .viewer-foot {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .stat-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 800;
+        }
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: 0.95fr 1.05fr;
+            gap: 18px;
+            margin-top: 18px;
+        }
+
+        .note-list {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .blendshape-panel {
+            display: grid;
+            gap: 8px;
+            max-height: 300px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .blendshape-row {
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: white;
+            border: 1px solid rgba(91, 72, 49, 0.1);
+        }
+
+        .blendshape-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .blendshape-name {
+            font-weight: 700;
+        }
+
+        .blendshape-name.mouth {
+            color: var(--warm);
+        }
+
+        .blendshape-name.other {
+            color: var(--accent);
+        }
+
+        .bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(103, 95, 87, 0.14);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bar > div {
+            height: 100%;
+            background: linear-gradient(135deg, var(--warm), #d5ab55);
+        }
+
+        .empty {
+            color: var(--muted);
+        }
+
+        @media (max-width: 1120px) {
+            .controls-grid,
+            .viewer-grid,
+            .bottom-grid,
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .slider-row,
+            .timeline {
+                grid-template-columns: 1fr;
+            }
+
+            .viewer-card {
+                min-height: auto;
+            }
+
+            .viewer-body {
+                height: 360px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="shell">
+        <div class="hero">
+            <h1>MediaPipe Calibration Viewer</h1>
+            <div class="subtitle">
+                Upload the original source video and the corresponding MediaPipe
+                <code>blendshapes_and_pose.json</code> file. The page keeps the raccoon head locked to the
+                source video time so you can judge whether mouth opening, lips, brows, and head pose are already
+                accurate enough before training.
+            </div>
+            <div class="hero-note">Use this first to decide whether calibration should happen before model training.</div>
+        </div>
+
+        <div class="panel">
+            <h2>Inputs</h2>
+            <div class="controls-grid">
+                <div class="file-card">
+                    <label for="videoFile">Original video</label>
+                    <input id="videoFile" type="file" accept="video/*">
+                    <div id="videoMeta" class="meta">Upload the same original clip you used when extracting MediaPipe data.</div>
+                </div>
+                <div class="file-card">
+                    <label for="jsonFile">MediaPipe JSON</label>
+                    <input id="jsonFile" type="file" accept=".json,application/json">
+                    <div id="jsonMeta" class="meta">Upload <code>blendshapes_and_pose.json</code> or a compatible framewise export.</div>
+                </div>
+            </div>
+            <div class="live-note">
+                <button id="startLiveBtn" class="secondary">Start Live Camera</button>
+                <button id="stopLiveBtn" class="ghost" disabled>Stop Live Camera</button>
+                <span id="liveModePill" class="pill">Live mode off</span>
+            </div>
+            <div class="live-note">
+                <button id="startRecordingBtn" class="secondary" disabled>Start Recording</button>
+                <button id="stopRecordingBtn" class="ghost" disabled>Stop Recording</button>
+                <span id="recordingStatusPill" class="pill">Recording idle</span>
+                <span id="recordingTimerPill" class="pill">00:00</span>
+                <a id="downloadLiveVideoLink" class="download-link" href="#">Download recorded video</a>
+                <a id="downloadLiveJsonLink" class="download-link" href="#">Download tracking JSON</a>
+            </div>
+            <div id="status" class="status info"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Playback</h2>
+            <div class="toolbar">
+                <button id="playBtn" disabled>Play</button>
+                <button id="pauseBtn" class="secondary" disabled>Pause</button>
+                <button id="stopBtn" class="ghost" disabled>Stop</button>
+                <button id="toggleRotationBtn" class="ghost">Rotation On</button>
+                <button id="togglePositionBtn" class="ghost">Translation On</button>
+                <span id="readinessPill" class="pill">Waiting for video + JSON</span>
+            </div>
+
+            <div class="slider-row">
+                <label for="mouthScale">Mouth and jaw scale</label>
+                <input id="mouthScale" type="range" min="0.5" max="2.5" step="0.05" value="1.00">
+                <span id="mouthScaleValue" class="pill">1.00x</span>
+            </div>
+
+            <div class="timeline">
+                <span id="currentFramePill" class="pill">Frame 0 / 0</span>
+                <input id="frameSlider" type="range" min="0" max="0" value="0" disabled>
+                <span id="timePill" class="pill">0.000s</span>
+            </div>
+        </div>
+
+        <div class="viewer-grid">
+            <div class="viewer-card">
+                <div class="viewer-title">
+                    <h3>Original source video</h3>
+                    <span id="videoStatePill" class="pill">No video loaded</span>
+                </div>
+                <div class="viewer-body">
+                    <video id="sourceVideo" controls playsinline preload="metadata"></video>
+                </div>
+                <div class="viewer-foot">
+                    <span id="durationPill" class="pill">Duration: -</span>
+                    <span id="videoTimePill" class="pill">Video time: -</span>
+                    <span id="jsonTimePill" class="pill">JSON time: -</span>
+                </div>
+            </div>
+
+            <div class="viewer-card">
+                <div class="viewer-title">
+                    <h3>MediaPipe raccoon playback</h3>
+                    <span id="modelPill" class="pill">Loading model...</span>
+                </div>
+                <div id="sceneContainer" class="viewer-body">
+                    <div id="sceneLoading" class="scene-loading">Loading local raccoon model...</div>
+                </div>
+                <div class="viewer-foot">
+                    <span id="deltaPill" class="pill">Alignment error: -</span>
+                    <span id="extractionPill" class="pill">Extraction FPS: -</span>
+                    <span id="frameTimestampPill" class="pill">Frame timestamp: -</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-grid">
+            <div class="panel" style="margin:0;">
+                <h2>Quick readout</h2>
+                <div class="info-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">Frames</div>
+                        <div id="statFrames" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Clip seconds</div>
+                        <div id="statSeconds" class="stat-value">0.0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Target FPS</div>
+                        <div id="statFps" class="stat-value">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Current index</div>
+                        <div id="statIndex" class="stat-value">0</div>
+                    </div>
+                </div>
+                <div class="file-card" style="margin-top:12px;">
+                    <label>How to use this page</label>
+                    <ul class="note-list">
+                        <li>Watch the source video and raccoon side by side with mouth scale at <code>1.00x</code>.</li>
+                        <li>Use <code>Start Live Camera</code> to drive the raccoon from your webcam before running any offline extraction.</li>
+                        <li>Use <code>Start Recording</code> during live mode to save a paired webcam <code>.webm</code> and matching tracking JSON.</li>
+                        <li>If the raw MediaPipe jaw and lips look consistently too weak, calibrate those targets before training.</li>
+                        <li>If timing is good but amplitude is low, calibration is the first fix, not a larger neural network.</li>
+                        <li>If the source and raccoon disagree only in a few channels, inspect those channels directly below.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="panel" style="margin:0;">
+                <h2>Most active blendshapes in the current frame</h2>
+                <div id="blendshapePanel" class="blendshape-panel">
+                    <div class="empty">Load a video and JSON file to inspect MediaPipe output.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const BLENDSHAPE_NAMES = [
+            "_neutral", "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft",
+            "browOuterUpRight", "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft",
+            "eyeBlinkRight", "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight",
+            "eyeLookOutLeft", "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight", "eyeSquintLeft",
+            "eyeSquintRight", "eyeWideLeft", "eyeWideRight", "jawForward", "jawLeft", "jawOpen",
+            "jawRight", "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft",
+            "mouthFrownRight", "mouthFunnel", "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight",
+            "mouthPressLeft", "mouthPressRight", "mouthPucker", "mouthRight", "mouthRollLower",
+            "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper", "mouthSmileLeft", "mouthSmileRight",
+            "mouthStretchLeft", "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight",
+            "noseSneerLeft", "noseSneerRight"
+        ];
+
+        const MOUTH_AND_JAW = new Set([
+            "jawForward", "jawLeft", "jawOpen", "jawRight",
+            "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft", "mouthFrownRight",
+            "mouthFunnel", "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight", "mouthPressLeft",
+            "mouthPressRight", "mouthPucker", "mouthRight", "mouthRollLower", "mouthRollUpper",
+            "mouthShrugLower", "mouthShrugUpper", "mouthSmileLeft", "mouthSmileRight",
+            "mouthStretchLeft", "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight"
+        ]);
+
+        const RACCOON_MODEL_URLS = [
+            "../V2A-over-training-old-nn/outputhtml/gltf/racoon_head/raccoon_head.glb",
+            "https://storage.googleapis.com/mediapipe-tasks/face_landmarker/raccoon_head.glb"
+        ];
+
+        const videoFile = document.getElementById("videoFile");
+        const jsonFile = document.getElementById("jsonFile");
+        const sourceVideo = document.getElementById("sourceVideo");
+        const playBtn = document.getElementById("playBtn");
+        const pauseBtn = document.getElementById("pauseBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const toggleRotationBtn = document.getElementById("toggleRotationBtn");
+        const togglePositionBtn = document.getElementById("togglePositionBtn");
+        const frameSlider = document.getElementById("frameSlider");
+        const mouthScale = document.getElementById("mouthScale");
+        const mouthScaleValue = document.getElementById("mouthScaleValue");
+        const startLiveBtn = document.getElementById("startLiveBtn");
+        const stopLiveBtn = document.getElementById("stopLiveBtn");
+        const startRecordingBtn = document.getElementById("startRecordingBtn");
+        const stopRecordingBtn = document.getElementById("stopRecordingBtn");
+
+        const statusEl = document.getElementById("status");
+        const videoMeta = document.getElementById("videoMeta");
+        const jsonMeta = document.getElementById("jsonMeta");
+        const readinessPill = document.getElementById("readinessPill");
+        const currentFramePill = document.getElementById("currentFramePill");
+        const timePill = document.getElementById("timePill");
+        const durationPill = document.getElementById("durationPill");
+        const videoTimePill = document.getElementById("videoTimePill");
+        const jsonTimePill = document.getElementById("jsonTimePill");
+        const deltaPill = document.getElementById("deltaPill");
+        const extractionPill = document.getElementById("extractionPill");
+        const frameTimestampPill = document.getElementById("frameTimestampPill");
+        const videoStatePill = document.getElementById("videoStatePill");
+        const modelPill = document.getElementById("modelPill");
+        const blendshapePanel = document.getElementById("blendshapePanel");
+
+        const statFrames = document.getElementById("statFrames");
+        const statSeconds = document.getElementById("statSeconds");
+        const statFps = document.getElementById("statFps");
+        const statIndex = document.getElementById("statIndex");
+        const liveModePill = document.getElementById("liveModePill");
+        const recordingStatusPill = document.getElementById("recordingStatusPill");
+        const recordingTimerPill = document.getElementById("recordingTimerPill");
+        const downloadLiveVideoLink = document.getElementById("downloadLiveVideoLink");
+        const downloadLiveJsonLink = document.getElementById("downloadLiveJsonLink");
+
+        let scene;
+        let camera;
+        let renderer;
+        let controls;
+        let avatarGroup;
+        let gltfScene = null;
+        let morphTargetMeshes = [];
+        let animationFrameId = null;
+        let currentVideoUrl = null;
+        let currentVideoOwnsObjectUrl = false;
+        let recording = null;
+        let currentFrameIndex = 0;
+        let rotationEnabled = true;
+        let positionEnabled = true;
+        let currentMouthScale = 1.0;
+        let modelLoaded = false;
+        let liveMode = false;
+        let liveStream = null;
+        let liveFaceLandmarker = null;
+        let liveLoopId = null;
+        let lastLiveVideoTime = -1;
+        let lastLiveFrameMs = 0;
+        let smoothedLiveFps = 0;
+        let mediaRecorder = null;
+        let liveRecording = false;
+        let recordingChunks = [];
+        let recordingFrames = [];
+        let recordingSessionId = null;
+        let recordingStartEpochMs = 0;
+        let recordingStartPerfMs = 0;
+        let recordingTimerId = null;
+        let liveVideoDownloadUrl = null;
+        let liveJsonDownloadUrl = null;
+        let autoLoadTriggered = false;
+        let morphTargetCount = 0;
+
+        const LIVE_FACE_TASK_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+        const pageParams = new URLSearchParams(window.location.search);
+        const autoloadVideoParam = pageParams.get("video");
+        const autoloadJsonParam = pageParams.get("json");
+        const autoloadPlay = pageParams.get("autoplay") === "1";
+
+        function setStatus(kind, message) {
+            statusEl.className = `status ${kind}`;
+            statusEl.textContent = message;
+        }
+
+        function formatTimer(milliseconds) {
+            const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+            const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+            const seconds = String(totalSeconds % 60).padStart(2, "0");
+            return `${minutes}:${seconds}`;
+        }
+
+        function clearLiveDownloadUrls() {
+            if (liveVideoDownloadUrl) {
+                URL.revokeObjectURL(liveVideoDownloadUrl);
+                liveVideoDownloadUrl = null;
+            }
+            if (liveJsonDownloadUrl) {
+                URL.revokeObjectURL(liveJsonDownloadUrl);
+                liveJsonDownloadUrl = null;
+            }
+            downloadLiveVideoLink.classList.remove("visible");
+            downloadLiveJsonLink.classList.remove("visible");
+            downloadLiveVideoLink.removeAttribute("download");
+            downloadLiveJsonLink.removeAttribute("download");
+            downloadLiveVideoLink.href = "#";
+            downloadLiveJsonLink.href = "#";
+        }
+
+        function updateReadiness() {
+            const fileReady = !!(recording && sourceVideo.src && !liveMode);
+            const liveReady = !!(liveMode && liveStream && liveFaceLandmarker);
+
+            playBtn.disabled = !fileReady;
+            pauseBtn.disabled = !fileReady || sourceVideo.paused;
+            stopBtn.disabled = !fileReady;
+            frameSlider.disabled = !recording || liveMode;
+            stopLiveBtn.disabled = !liveMode;
+            startLiveBtn.disabled = liveMode;
+            startRecordingBtn.disabled = !liveReady || liveRecording;
+            stopRecordingBtn.disabled = !liveRecording;
+
+            if (liveReady) {
+                readinessPill.textContent = "Live webcam active";
+            } else if (liveMode) {
+                readinessPill.textContent = "Starting live webcam";
+            } else if (fileReady) {
+                readinessPill.textContent = "Ready to compare";
+            } else {
+                readinessPill.textContent = "Waiting for video + JSON";
+            }
+        }
+
+        function updateModelStatus() {
+            if (!modelLoaded) {
+                modelPill.textContent = "Model loading";
+                return;
+            }
+            if (morphTargetCount > 0) {
+                modelPill.textContent = `Model ready · ${morphTargetCount} morphs`;
+            } else {
+                modelPill.textContent = "Model ready · no morphs";
+            }
+        }
+
+        async function initScene() {
+            const container = document.getElementById("sceneContainer");
+            const loading = document.getElementById("sceneLoading");
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x171614);
+
+            camera = new THREE.PerspectiveCamera(58, width / height, 0.1, 100);
+            camera.position.set(0, 0.05, 4.1);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.minDistance = 2.2;
+            controls.maxDistance = 7.5;
+            controls.target.set(0, 0, 0);
+
+            const hemi = new THREE.HemisphereLight(0xfff8ef, 0x1f1a16, 1.2);
+            scene.add(hemi);
+
+            const key = new THREE.DirectionalLight(0xffffff, 1.1);
+            key.position.set(2.8, 2.4, 3.1);
+            scene.add(key);
+
+            const fill = new THREE.DirectionalLight(0xe1fff6, 0.38);
+            fill.position.set(-2.2, 0.8, 2.0);
+            scene.add(fill);
+
+            avatarGroup = new THREE.Group();
+            scene.add(avatarGroup);
+
+            try {
+                await loadRaccoonModel();
+                modelLoaded = true;
+                updateModelStatus();
+                loading.remove();
+                if (recording) {
+                    updateFrame(currentFrameIndex);
+                }
+            } catch (error) {
+                console.error(error);
+                modelPill.textContent = "Model failed to load";
+                loading.textContent = "Failed to load raccoon model.";
+                setStatus("error", "Could not load the raccoon GLB model.");
+            }
+
+            renderLoop();
+        }
+
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        async function loadRaccoonModel() {
+            morphTargetCount = 0;
+            for (const url of RACCOON_MODEL_URLS) {
+                try {
+                    const gltf = await new Promise((resolve, reject) => {
+                        const loader = new GLTFLoader();
+                        loader.load(url, resolve, undefined, reject);
+                    });
+
+                    if (gltfScene) {
+                        avatarGroup.remove(gltfScene);
+                        morphTargetMeshes = [];
+                    }
+
+                    gltfScene = gltf.scene;
+                    avatarGroup.add(gltfScene);
+
+                    const box = new THREE.Box3().setFromObject(gltfScene);
+                    const size = box.getSize(new THREE.Vector3());
+                    const center = box.getCenter(new THREE.Vector3());
+                    const maxDimension = Math.max(size.x, size.y, size.z);
+                    const scale = 1.55 / Math.max(maxDimension, 1e-6);
+
+                    gltfScene.position.copy(center).multiplyScalar(-1);
+                    gltfScene.scale.setScalar(scale);
+                    gltfScene.position.y += size.y * scale * 0.05;
+
+                    gltfScene.traverse((object) => {
+                        if (!object.isMesh) return;
+                        object.frustumCulled = false;
+                        if (object.morphTargetDictionary && object.morphTargetInfluences) {
+                            morphTargetMeshes.push(object);
+                            morphTargetCount += Object.keys(object.morphTargetDictionary).length;
+                        }
+                    });
+                    return;
+                } catch (error) {
+                    console.warn(`Failed to load model from ${url}`, error);
+                }
+            }
+            throw new Error("All raccoon model URLs failed.");
+        }
+
+        function normalizeBlendshapes(rawBlendshapes) {
+            if (!rawBlendshapes) return {};
+            if (Array.isArray(rawBlendshapes)) {
+                const mapped = {};
+                for (let i = 0; i < Math.min(BLENDSHAPE_NAMES.length, rawBlendshapes.length); i++) {
+                    mapped[BLENDSHAPE_NAMES[i]] = Number(rawBlendshapes[i]) || 0;
+                }
+                return mapped;
+            }
+            return Object.fromEntries(
+                Object.entries(rawBlendshapes).map(([key, value]) => [key, Number(value) || 0])
+            );
+        }
+
+        function matrixToPose(rawMatrix) {
+            const pose = {
+                headPosition: { x: 0, y: 0, z: 0 },
+                headRotation: { w: 1, x: 0, y: 0, z: 0 }
+            };
+
+            if (!Array.isArray(rawMatrix) || rawMatrix.length < 16) {
+                return pose;
+            }
+
+            const m00 = Number(rawMatrix[0]) || 0;
+            const m01 = Number(rawMatrix[1]) || 0;
+            const m02 = Number(rawMatrix[2]) || 0;
+            const m10 = Number(rawMatrix[4]) || 0;
+            const m11 = Number(rawMatrix[5]) || 0;
+            const m12 = Number(rawMatrix[6]) || 0;
+            const m20 = Number(rawMatrix[8]) || 0;
+            const m21 = Number(rawMatrix[9]) || 0;
+            const m22 = Number(rawMatrix[10]) || 0;
+
+            const trace = m00 + m11 + m22;
+            let qw = 1;
+            let qx = 0;
+            let qy = 0;
+            let qz = 0;
+
+            if (trace > 0) {
+                const s = Math.sqrt(trace + 1.0) * 2;
+                qw = 0.25 * s;
+                qx = (m21 - m12) / s;
+                qy = (m02 - m20) / s;
+                qz = (m10 - m01) / s;
+            } else if (m00 > m11 && m00 > m22) {
+                const s = Math.sqrt(1.0 + m00 - m11 - m22) * 2;
+                qw = (m21 - m12) / s;
+                qx = 0.25 * s;
+                qy = (m01 + m10) / s;
+                qz = (m02 + m20) / s;
+            } else if (m11 > m22) {
+                const s = Math.sqrt(1.0 + m11 - m00 - m22) * 2;
+                qw = (m02 - m20) / s;
+                qx = (m01 + m10) / s;
+                qy = 0.25 * s;
+                qz = (m12 + m21) / s;
+            } else {
+                const s = Math.sqrt(1.0 + m22 - m00 - m11) * 2;
+                qw = (m10 - m01) / s;
+                qx = (m02 + m20) / s;
+                qy = (m12 + m21) / s;
+                qz = 0.25 * s;
+            }
+
+            const norm = Math.hypot(qw, qx, qy, qz) || 1;
+            pose.headPosition.x = THREE.MathUtils.clamp(Number(rawMatrix[3]) || 0, -0.2, 0.2);
+            pose.headPosition.y = THREE.MathUtils.clamp(Number(rawMatrix[7]) || 0, -0.2, 0.2);
+            pose.headPosition.z = THREE.MathUtils.clamp(Number(rawMatrix[11]) || 0, -0.2, 0.2);
+            pose.headRotation = {
+                w: qw / norm,
+                x: qx / norm,
+                y: qy / norm,
+                z: qz / norm
+            };
+            return pose;
+        }
+
+        function normalizePose(frame) {
+            if (frame.headPosition && frame.headRotation) {
+                return {
+                    headPosition: {
+                        x: Number(frame.headPosition.x) || 0,
+                        y: Number(frame.headPosition.y) || 0,
+                        z: Number(frame.headPosition.z) || 0
+                    },
+                    headRotation: {
+                        w: Number(frame.headRotation.w) || 1,
+                        x: Number(frame.headRotation.x) || 0,
+                        y: Number(frame.headRotation.y) || 0,
+                        z: Number(frame.headRotation.z) || 0
+                    }
+                };
+            }
+
+            if (Array.isArray(frame.head_pose) && frame.head_pose.length >= 7) {
+                return {
+                    headPosition: {
+                        x: Number(frame.head_pose[0]) || 0,
+                        y: Number(frame.head_pose[1]) || 0,
+                        z: Number(frame.head_pose[2]) || 0
+                    },
+                    headRotation: {
+                        w: Number(frame.head_pose[3]) || 1,
+                        x: Number(frame.head_pose[4]) || 0,
+                        y: Number(frame.head_pose[5]) || 0,
+                        z: Number(frame.head_pose[6]) || 0
+                    }
+                };
+            }
+
+            return {
+                headPosition: { x: 0, y: 0, z: 0 },
+                headRotation: { w: 1, x: 0, y: 0, z: 0 }
+            };
+        }
+
+        function normalizeTimestamp(value, fallbackSeconds) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return fallbackSeconds;
+            if (numeric > 1000) return numeric / 1000;
+            return numeric;
+        }
+
+        function normalizeRecording(raw) {
+            if (!raw.frames || !Array.isArray(raw.frames) || raw.frames.length === 0) {
+                throw new Error("JSON does not contain a valid frames array.");
+            }
+
+            const targetFPS = Number(raw?.sessionInfo?.targetFPS) || 30;
+            const frames = raw.frames.map((frame, index) => {
+                const fallbackSeconds = index / targetFPS;
+                const timestampSec = normalizeTimestamp(frame.timestamp, fallbackSeconds);
+                const pose = normalizePose(frame);
+                return {
+                    ...frame,
+                    timestampSec,
+                    blendshapes: normalizeBlendshapes(frame.blendshapes),
+                    headPosition: pose.headPosition,
+                    headRotation: pose.headRotation
+                };
+            });
+
+            const timestamps = [];
+            let previous = 0;
+            for (let i = 0; i < frames.length; i++) {
+                let t = frames[i].timestampSec;
+                if (!Number.isFinite(t)) t = i / targetFPS;
+                if (i > 0 && t < previous) {
+                    t = previous;
+                }
+                timestamps.push(t);
+                frames[i].timestampSec = t;
+                previous = t;
+            }
+
+            const clipSeconds = timestamps.length > 0 ? timestamps[timestamps.length - 1] : 0;
+            return {
+                frames,
+                timestamps,
+                frameCount: frames.length,
+                targetFPS,
+                clipSeconds,
+                sessionInfo: raw.sessionInfo || {}
+            };
+        }
+
+        function getScaledBlendshapes(blendshapes) {
+            const scaled = new Map();
+            for (const name of BLENDSHAPE_NAMES) {
+                const value = Number(blendshapes[name]) || 0;
+                const factor = MOUTH_AND_JAW.has(name) ? currentMouthScale : 1.0;
+                scaled.set(name, Math.min(Math.max(value * factor, 0), 1));
+            }
+            return scaled;
+        }
+
+        function appendLiveRecordingFrame(rawBlendshapes, poseFrame, hasFace) {
+            if (!liveRecording || !recordingSessionId) return;
+
+            const timestampMs = Math.max(0, Math.round(performance.now() - recordingStartPerfMs));
+            const blendshapes = {};
+            for (const name of BLENDSHAPE_NAMES) {
+                blendshapes[name] = hasFace ? (Number(rawBlendshapes?.[name]) || 0) : 0;
+            }
+
+            const frame = {
+                frame_index: recordingFrames.length,
+                timestamp: timestampMs,
+                blendshapes,
+                headPosition: {
+                    x: Number(poseFrame?.headPosition?.x) || 0,
+                    y: Number(poseFrame?.headPosition?.y) || 0,
+                    z: Number(poseFrame?.headPosition?.z) || 0
+                },
+                headRotation: {
+                    w: Number(poseFrame?.headRotation?.w) || 1,
+                    x: Number(poseFrame?.headRotation?.x) || 0,
+                    y: Number(poseFrame?.headRotation?.y) || 0,
+                    z: Number(poseFrame?.headRotation?.z) || 0
+                },
+                has_face: hasFace,
+                sessionId: recordingSessionId
+            };
+            recordingFrames.push(frame);
+        }
+
+        function setMorphTargets(blendshapeMap) {
+            for (const mesh of morphTargetMeshes) {
+                const dictionary = mesh.morphTargetDictionary;
+                const influences = mesh.morphTargetInfluences;
+                if (!dictionary || !influences) continue;
+
+                for (const [name, index] of Object.entries(dictionary)) {
+                    influences[index] = blendshapeMap.get(name) || 0;
+                }
+            }
+        }
+
+        function applyPose(frame) {
+            if (!avatarGroup) return;
+
+            if (rotationEnabled) {
+                avatarGroup.quaternion.set(
+                    frame.headRotation.x,
+                    frame.headRotation.y,
+                    frame.headRotation.z,
+                    frame.headRotation.w
+                ).normalize();
+            } else {
+                avatarGroup.quaternion.identity();
+            }
+
+            if (positionEnabled) {
+                avatarGroup.position.set(
+                    THREE.MathUtils.clamp((frame.headPosition.x || 0) * 0.5, -0.36, 0.36),
+                    THREE.MathUtils.clamp((frame.headPosition.y || 0) * 0.5, -0.22, 0.24),
+                    THREE.MathUtils.clamp((frame.headPosition.z || 0) * 0.2, -0.16, 0.16)
+                );
+            } else {
+                avatarGroup.position.set(0, 0, 0);
+            }
+        }
+
+        function renderBlendshapePanel(blendshapeMap) {
+            const sorted = Array.from(blendshapeMap.entries())
+                .filter(([, value]) => value > 0.01)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 18);
+
+            if (sorted.length === 0) {
+                blendshapePanel.innerHTML = '<div class="empty">This frame has no strong active blendshapes.</div>';
+                return;
+            }
+
+            blendshapePanel.innerHTML = sorted.map(([name, value]) => {
+                const width = Math.max(4, value * 100);
+                const cls = MOUTH_AND_JAW.has(name) ? "mouth" : "other";
+                return `
+                    <div class="blendshape-row">
+                        <div class="blendshape-head">
+                            <span class="blendshape-name ${cls}">${name}</span>
+                            <span>${(value * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="bar"><div style="width:${width}%"></div></div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        function updateLiveStats(timestampSec, inferenceMs, hasFace) {
+            const now = performance.now();
+            if (lastLiveFrameMs > 0) {
+                const deltaMs = now - lastLiveFrameMs;
+                const instFps = deltaMs > 0 ? 1000 / deltaMs : 0;
+                smoothedLiveFps = smoothedLiveFps === 0 ? instFps : (smoothedLiveFps * 0.85) + (instFps * 0.15);
+            }
+            lastLiveFrameMs = now;
+
+            statFrames.textContent = hasFace ? "live" : "no face";
+            statSeconds.textContent = timestampSec.toFixed(2);
+            statFps.textContent = smoothedLiveFps > 0 ? smoothedLiveFps.toFixed(1) : "-";
+            statIndex.textContent = "live";
+            currentFramePill.textContent = hasFace ? "Live face tracked" : "No face tracked";
+            timePill.textContent = `${timestampSec.toFixed(3)}s`;
+            const safeCurrentTime = Number.isFinite(sourceVideo.currentTime) ? sourceVideo.currentTime : 0;
+            videoTimePill.textContent = `Video time: ${safeCurrentTime.toFixed(3)}s`;
+            jsonTimePill.textContent = "JSON time: live";
+            frameTimestampPill.textContent = `Frame timestamp: ${timestampSec.toFixed(3)}s`;
+            extractionPill.textContent = `Tracking FPS: ${smoothedLiveFps > 0 ? smoothedLiveFps.toFixed(1) : "-"}`;
+            deltaPill.textContent = `Inference time: ${inferenceMs.toFixed(1)} ms`;
+        }
+
+        function applyLiveDetection(result, timestampSec, inferenceMs) {
+            const categories = result?.faceBlendshapes?.[0]?.categories || [];
+            const rawBlendshapes = {};
+            for (const category of categories) {
+                rawBlendshapes[category.categoryName] = Number(category.score) || 0;
+            }
+
+            const blendshapeMap = getScaledBlendshapes(rawBlendshapes);
+            renderBlendshapePanel(blendshapeMap);
+
+            let poseFrame = {
+                headPosition: { x: 0, y: 0, z: 0 },
+                headRotation: { w: 1, x: 0, y: 0, z: 0 }
+            };
+            const matrix = result?.facialTransformationMatrixes?.[0]?.data;
+            if (Array.isArray(matrix)) {
+                poseFrame = matrixToPose(matrix);
+            }
+
+            if (modelLoaded) {
+                applyPose(poseFrame);
+                setMorphTargets(blendshapeMap);
+            }
+
+            appendLiveRecordingFrame(rawBlendshapes, poseFrame, true);
+            updateLiveStats(timestampSec, inferenceMs, true);
+        }
+
+        function updateRecordingTimer() {
+            if (!liveRecording) {
+                recordingTimerPill.textContent = "00:00";
+                return;
+            }
+            recordingTimerPill.textContent = formatTimer(performance.now() - recordingStartPerfMs);
+        }
+
+        function finalizeLiveRecording() {
+            const mimeType = mediaRecorder?.mimeType || "video/webm";
+            const videoBlob = new Blob(recordingChunks, { type: mimeType });
+            const failedFrames = recordingFrames.filter((frame) => !frame.has_face).length;
+            const trackingJson = {
+                sessionInfo: {
+                    sessionId: recordingSessionId,
+                    startTime: recordingStartEpochMs,
+                    targetFPS: smoothedLiveFps > 0 ? Number(smoothedLiveFps.toFixed(2)) : 30,
+                    originalFPS: smoothedLiveFps > 0 ? Number(smoothedLiveFps.toFixed(2)) : 30,
+                    frameInterval: 1,
+                    videoPath: `${recordingSessionId}.webm`,
+                    captureMode: "live_webcam_mediapipe",
+                    includesAudio: true
+                },
+                frameCount: recordingFrames.length,
+                failedFrames,
+                failureRate: recordingFrames.length > 0 ? failedFrames / recordingFrames.length : 1,
+                frames: recordingFrames
+            };
+            const jsonBlob = new Blob([JSON.stringify(trackingJson, null, 2)], {
+                type: "application/json"
+            });
+
+            clearLiveDownloadUrls();
+            liveVideoDownloadUrl = URL.createObjectURL(videoBlob);
+            liveJsonDownloadUrl = URL.createObjectURL(jsonBlob);
+
+            downloadLiveVideoLink.href = liveVideoDownloadUrl;
+            downloadLiveVideoLink.download = `${recordingSessionId}.webm`;
+            downloadLiveVideoLink.classList.add("visible");
+
+            downloadLiveJsonLink.href = liveJsonDownloadUrl;
+            downloadLiveJsonLink.download = `${recordingSessionId}_blendshapes_and_pose.json`;
+            downloadLiveJsonLink.classList.add("visible");
+
+            recordingStatusPill.textContent = `Saved ${recordingFrames.length} frames`;
+            setStatus("info", "Live session recorded. Download the paired webcam video and tracking JSON.");
+
+            recordingChunks = [];
+            recordingFrames = [];
+            recordingSessionId = null;
+            mediaRecorder = null;
+            updateReadiness();
+        }
+
+        function startLiveRecording() {
+            if (!liveMode || !liveStream) {
+                setStatus("error", "Start Live Camera before recording a session.");
+                return;
+            }
+            if (liveRecording) return;
+            if (typeof MediaRecorder === "undefined") {
+                setStatus("error", "This browser does not support MediaRecorder for live session capture.");
+                return;
+            }
+
+            clearLiveDownloadUrls();
+            recordingChunks = [];
+            recordingFrames = [];
+            recordingSessionId = `live_session_${Date.now()}`;
+            recordingStartEpochMs = Date.now();
+            recordingStartPerfMs = performance.now();
+
+            const mimeCandidates = [
+                "video/webm;codecs=vp9,opus",
+                "video/webm;codecs=vp8,opus",
+                "video/webm;codecs=h264,opus",
+                "video/webm"
+            ];
+            const mimeType = mimeCandidates.find((candidate) => (
+                window.MediaRecorder
+                && MediaRecorder.isTypeSupported
+                && MediaRecorder.isTypeSupported(candidate)
+            ));
+
+            try {
+                mediaRecorder = new MediaRecorder(liveStream, mimeType ? { mimeType } : undefined);
+            } catch (error) {
+                console.error(error);
+                setStatus("error", "Unable to start live recording in this browser.");
+                recordingChunks = [];
+                recordingFrames = [];
+                recordingSessionId = null;
+                return;
+            }
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    recordingChunks.push(event.data);
+                }
+            };
+            mediaRecorder.onstop = finalizeLiveRecording;
+
+            mediaRecorder.start(250);
+            liveRecording = true;
+            recordingStatusPill.textContent = "Recording live";
+            updateRecordingTimer();
+            if (recordingTimerId !== null) {
+                clearInterval(recordingTimerId);
+            }
+            recordingTimerId = window.setInterval(updateRecordingTimer, 250);
+            setStatus("info", "Recording live webcam session with microphone audio and tracking JSON.");
+            updateReadiness();
+        }
+
+        function stopLiveRecording() {
+            if (!liveRecording) return;
+            liveRecording = false;
+            if (recordingTimerId !== null) {
+                clearInterval(recordingTimerId);
+                recordingTimerId = null;
+            }
+            recordingStatusPill.textContent = "Finalizing recording";
+            updateRecordingTimer();
+            if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                mediaRecorder.stop();
+            } else {
+                finalizeLiveRecording();
+            }
+            updateReadiness();
+        }
+
+        async function ensureLiveFaceLandmarker() {
+            if (liveFaceLandmarker) return liveFaceLandmarker;
+            if (!window.FilesetResolver || !window.FaceLandmarker) {
+                throw new Error("MediaPipe web bundle did not load.");
+            }
+
+            const vision = await window.FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
+            );
+
+            liveFaceLandmarker = await window.FaceLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: LIVE_FACE_TASK_URL },
+                runningMode: "VIDEO",
+                numFaces: 1,
+                outputFaceBlendshapes: true,
+                outputFacialTransformationMatrixes: true,
+                minFaceDetectionConfidence: 0.5,
+                minFacePresenceConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            return liveFaceLandmarker;
+        }
+
+        function stopLiveLoop() {
+            if (liveLoopId !== null) {
+                cancelAnimationFrame(liveLoopId);
+                liveLoopId = null;
+            }
+        }
+
+        function liveLoop() {
+            if (!liveMode || !liveFaceLandmarker || !sourceVideo.srcObject) {
+                liveLoopId = null;
+                return;
+            }
+
+            if (sourceVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && sourceVideo.currentTime !== lastLiveVideoTime) {
+                const started = performance.now();
+                const result = liveFaceLandmarker.detectForVideo(sourceVideo, performance.now());
+                const inferenceMs = performance.now() - started;
+                const timestampSec = Number(sourceVideo.currentTime) || 0;
+                lastLiveVideoTime = sourceVideo.currentTime;
+
+                if (result?.faceLandmarks?.length) {
+                    applyLiveDetection(result, timestampSec, inferenceMs);
+                    liveModePill.textContent = "Live mode on";
+                    videoStatePill.textContent = "Live camera";
+                } else {
+                    blendshapePanel.innerHTML = '<div class="empty">No face detected in the current webcam frame.</div>';
+                    appendLiveRecordingFrame({}, {
+                        headPosition: { x: 0, y: 0, z: 0 },
+                        headRotation: { w: 1, x: 0, y: 0, z: 0 }
+                    }, false);
+                    updateLiveStats(timestampSec, inferenceMs, false);
+                    liveModePill.textContent = "Live mode on";
+                    videoStatePill.textContent = "Live camera, face lost";
+                }
+            }
+
+            liveLoopId = requestAnimationFrame(liveLoop);
+        }
+
+        async function startLiveMode() {
+            try {
+                stopSyncLoop();
+                sourceVideo.pause();
+
+                liveMode = true;
+                lastLiveVideoTime = -1;
+                lastLiveFrameMs = 0;
+                smoothedLiveFps = 0;
+                await ensureLiveFaceLandmarker();
+
+                liveStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+
+                sourceVideo.controls = false;
+                sourceVideo.muted = true;
+                sourceVideo.srcObject = liveStream;
+                await sourceVideo.play();
+                durationPill.textContent = "Duration: live";
+                liveModePill.textContent = "Live mode on";
+                recordingStatusPill.textContent = "Recording idle";
+                recordingTimerPill.textContent = "00:00";
+                setStatus("info", "Live webcam tracking is running in-browser. Compare your face to the raccoon in real time.");
+                updateReadiness();
+                stopLiveLoop();
+                liveLoop();
+            } catch (error) {
+                console.error(error);
+                liveMode = false;
+                liveModePill.textContent = "Live mode failed";
+                setStatus("error", `Could not start live camera mode: ${error.message}`);
+                updateReadiness();
+            }
+        }
+
+        function stopLiveMode() {
+            if (liveRecording) {
+                stopLiveRecording();
+            }
+            stopLiveLoop();
+            if (liveStream) {
+                for (const track of liveStream.getTracks()) {
+                    track.stop();
+                }
+            }
+            liveStream = null;
+            liveMode = false;
+            lastLiveVideoTime = -1;
+            sourceVideo.pause();
+            sourceVideo.srcObject = null;
+            sourceVideo.controls = true;
+            sourceVideo.muted = false;
+            if (currentVideoUrl) {
+                sourceVideo.src = currentVideoUrl;
+                sourceVideo.load();
+            } else {
+                sourceVideo.removeAttribute("src");
+                sourceVideo.load();
+            }
+            liveModePill.textContent = "Live mode off";
+            videoStatePill.textContent = currentVideoUrl ? "Video loaded" : "No video loaded";
+            recordingStatusPill.textContent = "Recording idle";
+            recordingTimerPill.textContent = "00:00";
+            extractionPill.textContent = "Extraction FPS: -";
+            deltaPill.textContent = "Alignment error: -";
+            frameTimestampPill.textContent = "Frame timestamp: -";
+            if (!recording) {
+                blendshapePanel.innerHTML = '<div class="empty">Load a video and JSON file to inspect MediaPipe output.</div>';
+                statFrames.textContent = "0";
+                statSeconds.textContent = "0.0";
+                statFps.textContent = "-";
+                statIndex.textContent = "0";
+            } else {
+                updateFrame(currentFrameIndex);
+            }
+            setStatus("info", "Live webcam mode stopped.");
+            updateReadiness();
+        }
+
+        function binarySearchFrame(timestamps, target) {
+            let left = 0;
+            let right = timestamps.length - 1;
+
+            while (left < right) {
+                const mid = Math.floor((left + right) / 2);
+                if (timestamps[mid] < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+
+            const current = left;
+            const prev = Math.max(0, current - 1);
+            if (current === 0) return 0;
+            return Math.abs(timestamps[current] - target) < Math.abs(timestamps[prev] - target) ? current : prev;
+        }
+
+        function updateFrame(index) {
+            if (!recording) return;
+            const clamped = Math.max(0, Math.min(index, recording.frameCount - 1));
+            currentFrameIndex = clamped;
+            const frame = recording.frames[clamped];
+            const blendshapeMap = getScaledBlendshapes(frame.blendshapes);
+
+            renderBlendshapePanel(blendshapeMap);
+
+            if (modelLoaded) {
+                applyPose(frame);
+                setMorphTargets(blendshapeMap);
+            }
+
+            const safeVideoTime = Number.isFinite(sourceVideo.currentTime) ? sourceVideo.currentTime : 0;
+
+            currentFramePill.textContent = `Frame ${clamped + 1} / ${recording.frameCount}`;
+            timePill.textContent = `${frame.timestampSec.toFixed(3)}s`;
+            videoTimePill.textContent = `Video time: ${safeVideoTime.toFixed(3)}s`;
+            jsonTimePill.textContent = `JSON time: ${frame.timestampSec.toFixed(3)}s`;
+            frameTimestampPill.textContent = `Frame timestamp: ${frame.timestampSec.toFixed(3)}s`;
+            deltaPill.textContent = `Alignment error: ${(Math.abs(safeVideoTime - frame.timestampSec) * 1000).toFixed(1)} ms`;
+            statIndex.textContent = String(clamped);
+            frameSlider.value = String(clamped);
+        }
+
+        function syncFromVideo() {
+            if (!recording) return;
+            const idx = binarySearchFrame(recording.timestamps, sourceVideo.currentTime || 0);
+            updateFrame(idx);
+
+            if (!sourceVideo.paused && !sourceVideo.ended) {
+                animationFrameId = requestAnimationFrame(syncFromVideo);
+            } else {
+                animationFrameId = null;
+                pauseBtn.disabled = true;
+            }
+        }
+
+        function stopSyncLoop() {
+            if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+        }
+
+        function refreshStats() {
+            if (!recording) return;
+            statFrames.textContent = String(recording.frameCount);
+            statSeconds.textContent = recording.clipSeconds.toFixed(2);
+            statFps.textContent = String(recording.targetFPS);
+            extractionPill.textContent = `Extraction FPS: ${recording.targetFPS}`;
+            frameSlider.max = String(Math.max(0, recording.frameCount - 1));
+        }
+
+        function resolveQueryAssetUrl(raw) {
+            if (!raw) return null;
+            try {
+                return new URL(raw, window.location.href).toString();
+            } catch (error) {
+                console.error(error);
+                return null;
+            }
+        }
+
+        function summarizeUrl(url) {
+            try {
+                const parsed = new URL(url, window.location.href);
+                const lastSegment = parsed.pathname.split("/").filter(Boolean).pop();
+                return lastSegment || parsed.pathname || url;
+            } catch (error) {
+                return url;
+            }
+        }
+
+        function applyRecordingData(raw, sourceLabel) {
+            recording = normalizeRecording(raw);
+            refreshStats();
+            updateFrame(0);
+            jsonMeta.textContent = `${sourceLabel} · ${recording.frameCount} frames · ${recording.clipSeconds.toFixed(2)} s`;
+            setStatus("info", "JSON loaded. If this is the matching source clip, press Play and inspect mouth amplitude.");
+            updateReadiness();
+        }
+
+        function loadVideoFromResolvedUrl(url, sourceLabel) {
+            if (liveMode) {
+                stopLiveMode();
+            }
+
+            revokeVideoUrl();
+            currentVideoUrl = url;
+            currentVideoOwnsObjectUrl = false;
+            sourceVideo.srcObject = null;
+            sourceVideo.controls = true;
+            sourceVideo.muted = false;
+            sourceVideo.src = currentVideoUrl;
+            sourceVideo.load();
+
+            videoMeta.textContent = `${sourceLabel} · remote URL`;
+            videoStatePill.textContent = "Video loaded";
+            setStatus("info", "Video loaded. Now upload or auto-load the matching MediaPipe JSON.");
+            updateReadiness();
+        }
+
+        async function loadRecordingFromResolvedUrl(url, sourceLabel) {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} while loading ${sourceLabel}`);
+            }
+            const raw = await response.json();
+            applyRecordingData(raw, sourceLabel);
+        }
+
+        async function initializeFromQueryParams() {
+            if (autoLoadTriggered) return;
+            if (!autoloadVideoParam && !autoloadJsonParam) return;
+            autoLoadTriggered = true;
+
+            const resolvedVideoUrl = resolveQueryAssetUrl(autoloadVideoParam);
+            const resolvedJsonUrl = resolveQueryAssetUrl(autoloadJsonParam);
+
+            try {
+                if (resolvedVideoUrl) {
+                    loadVideoFromResolvedUrl(resolvedVideoUrl, summarizeUrl(resolvedVideoUrl));
+                }
+
+                if (resolvedJsonUrl) {
+                    await loadRecordingFromResolvedUrl(resolvedJsonUrl, summarizeUrl(resolvedJsonUrl));
+                }
+
+                if (autoloadPlay && resolvedVideoUrl) {
+                    sourceVideo.addEventListener("loadedmetadata", () => {
+                        sourceVideo.play().catch((error) => {
+                            console.warn("Autoplay was blocked by the browser.", error);
+                        });
+                    }, { once: true });
+                }
+            } catch (error) {
+                console.error(error);
+                setStatus("error", `Auto-load failed: ${error.message}`);
+                updateReadiness();
+            }
+        }
+
+        function revokeVideoUrl() {
+            if (currentVideoOwnsObjectUrl && currentVideoUrl) {
+                URL.revokeObjectURL(currentVideoUrl);
+            }
+            currentVideoUrl = null;
+            currentVideoOwnsObjectUrl = false;
+        }
+
+        videoFile.addEventListener("change", async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            if (liveMode) {
+                stopLiveMode();
+            }
+
+            revokeVideoUrl();
+            currentVideoUrl = URL.createObjectURL(file);
+            currentVideoOwnsObjectUrl = true;
+            sourceVideo.srcObject = null;
+            sourceVideo.controls = true;
+            sourceVideo.muted = false;
+            sourceVideo.src = currentVideoUrl;
+            sourceVideo.load();
+
+            videoMeta.textContent = `${file.name} · ${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+            videoStatePill.textContent = "Video loaded";
+            setStatus("info", "Video loaded. Now upload the matching MediaPipe JSON.");
+            updateReadiness();
+        });
+
+        jsonFile.addEventListener("change", async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            try {
+                const raw = JSON.parse(await file.text());
+                applyRecordingData(raw, file.name);
+            } catch (error) {
+                console.error(error);
+                recording = null;
+                setStatus("error", `Failed to load JSON: ${error.message}`);
+                updateReadiness();
+            }
+        });
+
+        sourceVideo.addEventListener("loadedmetadata", () => {
+            durationPill.textContent = Number.isFinite(sourceVideo.duration) ? `Duration: ${sourceVideo.duration.toFixed(2)}s` : "Duration: live";
+            videoStatePill.textContent = liveMode ? "Live camera" : "Ready";
+            if (recording && !liveMode) updateFrame(binarySearchFrame(recording.timestamps, 0));
+            updateReadiness();
+        });
+
+        sourceVideo.addEventListener("play", () => {
+            if (liveMode) return;
+            pauseBtn.disabled = false;
+            if (recording) {
+                updateFrame(binarySearchFrame(recording.timestamps, sourceVideo.currentTime || 0));
+            }
+            stopSyncLoop();
+            syncFromVideo();
+        });
+
+        sourceVideo.addEventListener("pause", () => {
+            if (liveMode) return;
+            stopSyncLoop();
+            pauseBtn.disabled = true;
+            if (recording) updateFrame(binarySearchFrame(recording.timestamps, sourceVideo.currentTime || 0));
+        });
+
+        sourceVideo.addEventListener("seeked", () => {
+            if (liveMode) return;
+            if (recording) updateFrame(binarySearchFrame(recording.timestamps, sourceVideo.currentTime || 0));
+        });
+
+        sourceVideo.addEventListener("timeupdate", () => {
+            if (liveMode) return;
+            if (sourceVideo.paused && recording) {
+                updateFrame(binarySearchFrame(recording.timestamps, sourceVideo.currentTime || 0));
+            }
+        });
+
+        sourceVideo.addEventListener("ended", () => {
+            if (liveMode) return;
+            stopSyncLoop();
+            pauseBtn.disabled = true;
+        });
+
+        playBtn.addEventListener("click", async () => {
+            if (!recording || !sourceVideo.src) return;
+            await sourceVideo.play();
+            pauseBtn.disabled = false;
+        });
+
+        pauseBtn.addEventListener("click", () => {
+            sourceVideo.pause();
+        });
+
+        stopBtn.addEventListener("click", () => {
+            sourceVideo.pause();
+            sourceVideo.currentTime = 0;
+            stopSyncLoop();
+            if (recording) updateFrame(0);
+        });
+
+        startLiveBtn.addEventListener("click", () => {
+            startLiveMode();
+        });
+
+        stopLiveBtn.addEventListener("click", () => {
+            stopLiveMode();
+        });
+
+        startRecordingBtn.addEventListener("click", () => {
+            startLiveRecording();
+        });
+
+        stopRecordingBtn.addEventListener("click", () => {
+            stopLiveRecording();
+        });
+
+        frameSlider.addEventListener("input", (event) => {
+            if (!recording) return;
+            const index = Number(event.target.value) || 0;
+            const timestamp = recording.timestamps[index] || 0;
+            sourceVideo.pause();
+            sourceVideo.currentTime = timestamp;
+            updateFrame(index);
+        });
+
+        mouthScale.addEventListener("input", () => {
+            currentMouthScale = Number(mouthScale.value) || 1.0;
+            mouthScaleValue.textContent = `${currentMouthScale.toFixed(2)}x`;
+            if (recording) updateFrame(currentFrameIndex);
+        });
+
+        toggleRotationBtn.addEventListener("click", () => {
+            rotationEnabled = !rotationEnabled;
+            toggleRotationBtn.textContent = rotationEnabled ? "Rotation On" : "Rotation Off";
+            if (recording) updateFrame(currentFrameIndex);
+        });
+
+        togglePositionBtn.addEventListener("click", () => {
+            positionEnabled = !positionEnabled;
+            togglePositionBtn.textContent = positionEnabled ? "Translation On" : "Translation Off";
+            if (recording) updateFrame(currentFrameIndex);
+        });
+
+        window.addEventListener("resize", () => {
+            if (!renderer || !camera) return;
+            const container = document.getElementById("sceneContainer");
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+
+        setStatus("info", "Load the original video and matching MediaPipe JSON to start the comparison.");
+        updateReadiness();
+        updateModelStatus();
+        initializeFromQueryParams();
+        initScene();
+    </script>
+</body>
+
+</html>

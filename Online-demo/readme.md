@@ -38,6 +38,12 @@ Transformer-only page:
 http://127.0.0.1:8000/Online-demo/transformer-model.html
 ```
 
+MediaPipe calibration page:
+
+```text
+http://127.0.0.1:8000/Online-demo/mediapipe-calibration.html
+```
+
 Three-way comparison page:
 
 ```text
@@ -69,6 +75,19 @@ http://127.0.0.1:8000/Online-demo/index.html
   - ONNX size
   - architecture summary
   - side-by-side playback output
+
+`mediapipe-calibration.html`
+
+- uploads:
+  - original source video
+  - matching `blendshapes_and_pose.json`
+- can also run:
+  - live webcam tracking in-browser
+- shows:
+  - source video on the left
+  - MediaPipe raccoon playback on the right
+  - timestamp-synchronized frame scrubbing
+  - mouth/jaw scaling for quick calibration checks
 
 ## Assets
 

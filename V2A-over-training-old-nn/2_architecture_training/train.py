@@ -24,6 +24,13 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 # from models.tcn_model import create_model
 from models.tcn_10s_model import create_model
+from blendshape_layout import (
+    JAW_OPEN_INDEX,
+    MOUTH_AND_JAW_INDICES,
+    MOUTH_CLOSE_INDEX,
+    POSE_INDICES,
+    SMILE_INDICES,
+)
 
 class AudioBlendshapeLoss(nn.Module):
     """
@@ -33,26 +40,28 @@ class AudioBlendshapeLoss(nn.Module):
                  base_weight=1.0,           # Base loss weight
                  temporal_weight=0.0,       # Start with 0, enable after base loss drops
                  silence_weight=0.0,        # Start with 0, enable after base loss drops
-                 pose_clamp_weight=0.0):    # Start with 0, enable after base loss drops
+                 pose_clamp_weight=0.0,     # Start with 0, enable after base loss drops
+                 mouth_weight_scale=1.1):
         super().__init__()
         
         self.base_weight = base_weight
         self.temporal_weight = temporal_weight
         self.silence_weight = silence_weight
         self.pose_clamp_weight = pose_clamp_weight
+        self.mouth_weight_scale = mouth_weight_scale
         
-        # Mouth-related blendshape indices (approximate - adjust based on MediaPipe mapping)
-        # These are typically jaw and mouth-related indices
-        self.mouth_indices = [10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]  # Approximate
+        # Canonical jaw + mouth indices from the shared MediaPipe layout.
+        self.mouth_indices = MOUTH_AND_JAW_INDICES
         
         # Pose indices (last 7 values: x,y,z,qw,qx,qy,qz)
-        self.pose_indices = list(range(52, 59))
+        self.pose_indices = POSE_INDICES
         
         print(f"Loss function initialized:")
         print(f"  Base weight: {base_weight}")
         print(f"  Temporal weight: {temporal_weight}")
         print(f"  Silence weight: {silence_weight}")
         print(f"  Pose clamp weight: {pose_clamp_weight}")
+        print(f"  Mouth weight scale: {mouth_weight_scale}")
     
     def enable_temporal_loss(self, weight=0.1):
         """Enable temporal smoothness loss"""
@@ -83,8 +92,18 @@ class AudioBlendshapeLoss(nn.Module):
         """
         batch_size, seq_len, feature_dim = predictions.shape
         
-        # 1. Base loss (Huber with delta=1, equivalent to smooth L1)
-        base_loss = nn.functional.smooth_l1_loss(predictions, targets, reduction='mean')
+        # 1. Base loss (Huber with delta=1, equivalent to smooth L1), with a light
+        # boost on mouth and jaw channels.
+        base_loss_per_element = nn.functional.smooth_l1_loss(
+            predictions, targets, reduction='none'
+        )
+        channel_weights = torch.ones(
+            feature_dim,
+            device=predictions.device,
+            dtype=predictions.dtype,
+        )
+        channel_weights[self.mouth_indices] = self.mouth_weight_scale
+        base_loss = (base_loss_per_element * channel_weights.view(1, 1, -1)).mean()
         
         # 2. Temporal smoothness penalties
         pred_diff1 = predictions[:, 1:] - predictions[:, :-1]  # First derivative
@@ -165,9 +184,9 @@ class TCNTrainer:
         self.criterion = AudioBlendshapeLoss()
         
         # Key mouth and pose indices for validation metrics
-        self.jaw_open_idx = 25  # Approximate index for jaw open
-        self.lip_close_idx = 12  # Approximate index for lip closure
-        self.smile_idx = 20     # Approximate index for smile
+        self.jaw_open_idx = JAW_OPEN_INDEX
+        self.lip_close_idx = MOUTH_CLOSE_INDEX
+        self.smile_indices = SMILE_INDICES
         
         print(f"Trainer initialized on device: {device}")
     
@@ -386,6 +405,12 @@ class TCNTrainer:
         # Flatten sequences for metric computation
         pred_flat = predictions.view(-1, predictions.size(-1)).numpy()
         target_flat = targets.view(-1, targets.size(-1)).numpy()
+
+        def safe_pearsonr(a, b):
+            if np.std(a) < 1e-8 or np.std(b) < 1e-8:
+                return 0.0
+            value = pearsonr(a, b)[0]
+            return value if not np.isnan(value) else 0.0
         
         # MAE per channel
         mae_per_channel = np.mean(np.abs(pred_flat - target_flat), axis=0)
@@ -393,19 +418,30 @@ class TCNTrainer:
         # Key feature MAEs
         jaw_open_mae = mae_per_channel[self.jaw_open_idx]
         lip_close_mae = mae_per_channel[self.lip_close_idx]
-        smile_mae = mae_per_channel[self.smile_idx]
+        smile_mae = float(np.mean(mae_per_channel[self.smile_indices]))
         
         # Pose MAE (last 7 features)
-        pose_mae = np.mean(mae_per_channel[52:59])
+        pose_mae = float(np.mean(mae_per_channel[POSE_INDICES]))
         
         # Pearson correlations for key features
-        jaw_corr = pearsonr(pred_flat[:, self.jaw_open_idx], target_flat[:, self.jaw_open_idx])[0]
-        lip_corr = pearsonr(pred_flat[:, self.lip_close_idx], target_flat[:, self.lip_close_idx])[0]
-        smile_corr = pearsonr(pred_flat[:, self.smile_idx], target_flat[:, self.smile_idx])[0]
+        jaw_corr = safe_pearsonr(
+            pred_flat[:, self.jaw_open_idx], target_flat[:, self.jaw_open_idx]
+        )
+        lip_corr = safe_pearsonr(
+            pred_flat[:, self.lip_close_idx], target_flat[:, self.lip_close_idx]
+        )
+        smile_corr = float(
+            np.mean(
+                [
+                    safe_pearsonr(pred_flat[:, idx], target_flat[:, idx])
+                    for idx in self.smile_indices
+                ]
+            )
+        )
         
         # Overall metrics
-        overall_mae = np.mean(mae_per_channel)
-        mouth_mae = np.mean(mae_per_channel[10:30])  # Approximate mouth region
+        overall_mae = float(np.mean(mae_per_channel))
+        mouth_mae = float(np.mean(mae_per_channel[MOUTH_AND_JAW_INDICES]))
         
         return {
             'overall_mae': overall_mae,
@@ -414,9 +450,9 @@ class TCNTrainer:
             'lip_close_mae': lip_close_mae,
             'smile_mae': smile_mae,
             'pose_mae': pose_mae,
-            'jaw_corr': jaw_corr if not np.isnan(jaw_corr) else 0.0,
-            'lip_corr': lip_corr if not np.isnan(lip_corr) else 0.0,
-            'smile_corr': smile_corr if not np.isnan(smile_corr) else 0.0
+            'jaw_corr': jaw_corr,
+            'lip_corr': lip_corr,
+            'smile_corr': smile_corr,
         }
     
     def train(self, num_epochs=10, batch_size=16, validation_split=0.2):
